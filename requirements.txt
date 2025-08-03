@@ -1,0 +1,13 @@
+# MeetingScribe Dependencies
+rich==13.7.0
+loguru==0.7.2
+python-dotenv==1.0.0
+pydantic==2.5.0
+
+# Audio (instalar depois)
+# pyaudiowpatch==0.2.12.8
+# faster-whisper==1.0.3
+
+# API (instalar depois) 
+# fastapi==0.104.1
+# uvicorn==0.24.0

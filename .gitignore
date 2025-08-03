@@ -1,0 +1,24 @@
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+*.egg-info/
+.pytest_cache/
+
+# MeetingScribe specific
+storage/recordings/*.wav
+storage/recordings/*.mp3
+storage/transcriptions/*.json
+models/*.bin
+logs/*.log
+.env.local
+
+# OS & IDEs  
+.DS_Store
+Thumbs.db
+.vscode/settings.json
+
+# Temporary files
+*.tmp
+temp_*
