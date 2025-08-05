@@ -1,13 +1,48 @@
-# MeetingScribe Dependencies
-rich==13.7.0
-loguru==0.7.2
-python-dotenv==1.0.0
-pydantic==2.5.0
+# MeetingScribe - Sistema de Transcrição IA
+# Dependências Python para funcionalidade completa
 
-# Audio (instalar depois)
-# pyaudiowpatch==0.2.12.8
-# faster-whisper==1.0.3
+# Interface e Configuração
+rich==14.1.0
+loguru==0.7.3
+python-dotenv==1.1.1
+pydantic==2.11.7
+pydantic-settings==2.10.1
 
-# API (instalar depois) 
+# Hardware Detection
+psutil==6.1.1
+py-cpuinfo==9.0.0
+
+# Processamento de Áudio
+pyaudiowpatch==0.2.12.7
+
+# Transcrição IA (OpenAI Whisper)
+faster-whisper==1.1.1
+
+# Speaker Detection (IA para identificação de vozes)
+pyannote.audio==3.3.2
+
+# Dependências automáticas do faster-whisper:
+# - ctranslate2>=4.0,<5
+# - huggingface-hub>=0.13
+# - tokenizers>=0.13,<1
+# - onnxruntime>=1.14,<2
+# - av>=11
+
+# Dependências automáticas do pyannote.audio:
+# - torch>=2.0.0
+# - torchaudio>=2.2.0
+# - lightning>=2.0.1
+# - speechbrain>=1.0.0
+# - asteroid-filterbanks>=0.4
+# - pyannote.core>=5.0.0
+# - pyannote.database>=5.0.1
+# - pyannote.pipeline>=3.0.1
+
+# API REST (futuro)
 # fastapi==0.104.1
 # uvicorn==0.24.0
+
+# Notas:
+# - PyTorch será instalado automaticamente pelo faster-whisper se necessário
+# - No Windows, WASAPI está disponível nativamente
+# - Para GPU, certifique-se de ter drivers CUDA instalados
