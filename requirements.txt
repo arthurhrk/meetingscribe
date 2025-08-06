@@ -38,6 +38,12 @@ pyannote.audio==3.3.2
 # - pyannote.database>=5.0.1
 # - pyannote.pipeline>=3.0.1
 
+# Extensão Raycast (separada)
+# A extensão Raycast está em raycast-extension/ e requer:
+# - Node.js 18+ para desenvolvimento
+# - Raycast instalado no sistema
+# - Dependências npm definidas em raycast-extension/package.json
+
 # API REST (futuro)
 # fastapi==0.104.1
 # uvicorn==0.24.0
@@ -46,3 +52,4 @@ pyannote.audio==3.3.2
 # - PyTorch será instalado automaticamente pelo faster-whisper se necessário
 # - No Windows, WASAPI está disponível nativamente
 # - Para GPU, certifique-se de ter drivers CUDA instalados
+# - A extensão Raycast se comunica via CLI com argumentos JSON
