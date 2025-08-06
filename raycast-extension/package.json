@@ -1,0 +1,143 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "meetingscribe",
+  "title": "MeetingScribe",
+  "description": "Sistema inteligente de transcrição para reuniões com processamento 100% local usando IA",
+  "icon": "microphone.png",
+  "author": "arthurhrk",
+  "license": "MIT",
+  "version": "1.0.0",
+  "commands": [
+    {
+      "name": "record",
+      "title": "Start Recording",
+      "subtitle": "MeetingScribe",
+      "description": "Inicia uma nova gravação de áudio",
+      "mode": "view",
+      "keywords": [
+        "record",
+        "gravação",
+        "audio",
+        "meeting"
+      ]
+    },
+    {
+      "name": "recent",
+      "title": "Recent Transcriptions",
+      "subtitle": "MeetingScribe", 
+      "description": "Lista as transcrições recentes com preview",
+      "mode": "view",
+      "keywords": [
+        "recent",
+        "transcriptions",
+        "histórico",
+        "arquivos"
+      ]
+    },
+    {
+      "name": "transcribe",
+      "title": "Transcribe File",
+      "subtitle": "MeetingScribe",
+      "description": "Transcreve um arquivo de áudio existente",
+      "mode": "view",
+      "keywords": [
+        "transcribe",
+        "arquivo",
+        "whisper",
+        "ai"
+      ]
+    },
+    {
+      "name": "status",
+      "title": "System Status",
+      "subtitle": "MeetingScribe",
+      "description": "Verifica o status do sistema e dispositivos",
+      "mode": "view",
+      "keywords": [
+        "status",
+        "system",
+        "devices",
+        "health"
+      ]
+    },
+    {
+      "name": "export",
+      "title": "Quick Export",
+      "subtitle": "MeetingScribe",
+      "description": "Exporta a última transcrição rapidamente",
+      "mode": "view",
+      "keywords": [
+        "export",
+        "exportar",
+        "txt",
+        "json"
+      ]
+    }
+  ],
+  "preferences": [
+    {
+      "name": "pythonPath",
+      "title": "Python Path",
+      "description": "Caminho para o executável Python do MeetingScribe",
+      "type": "textfield",
+      "default": "python",
+      "required": false
+    },
+    {
+      "name": "projectPath",
+      "title": "Project Path", 
+      "description": "Caminho para o diretório do MeetingScribe",
+      "type": "textfield",
+      "default": "",
+      "required": true
+    },
+    {
+      "name": "defaultModel",
+      "title": "Default Whisper Model",
+      "description": "Modelo Whisper padrão para transcrições",
+      "type": "dropdown",
+      "default": "base",
+      "data": [
+        {
+          "title": "Tiny (Mais rápido)",
+          "value": "tiny"
+        },
+        {
+          "title": "Base (Equilibrado)", 
+          "value": "base"
+        },
+        {
+          "title": "Small (Boa precisão)",
+          "value": "small"
+        },
+        {
+          "title": "Medium (Alta precisão)",
+          "value": "medium"
+        },
+        {
+          "title": "Large-v3 (Máxima precisão)",
+          "value": "large-v3"
+        }
+      ],
+      "required": false
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.75.2"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^1.0.6",
+    "@types/node": "20.8.10",
+    "@types/react": "18.2.27",
+    "eslint": "^8.51.0", 
+    "prettier": "^3.0.3",
+    "typescript": "^5.2.2"
+  },
+  "scripts": {
+    "build": "ray build -e dist",
+    "dev": "ray develop",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint",
+    "publish": "npx @raycast/api@latest publish"
+  }
+}

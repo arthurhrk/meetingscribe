@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Raycast",
+  "extends": "@raycast/eslint-config/tsconfig.json"
+}

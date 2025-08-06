@@ -11,8 +11,10 @@ Python: >=3.8
 """
 
 import sys
+import json
+import argparse
 from typing import Dict, List, Optional, Tuple, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from loguru import logger
 
 try:
@@ -395,6 +397,28 @@ def main():
     """
     Função principal para teste e demonstração do DeviceManager.
     """
+    parser = argparse.ArgumentParser(description='MeetingScribe Device Manager')
+    parser.add_argument('--list-json', action='store_true', help='Lista dispositivos em formato JSON')
+    args = parser.parse_args()
+    
+    if args.list_json:
+        try:
+            with DeviceManager() as dm:
+                devices = dm.list_all_devices()
+                device_list = []
+                
+                for device in devices:
+                    device_dict = asdict(device)
+                    device_dict['id'] = str(device.index)
+                    device_list.append(device_dict)
+                
+                print(json.dumps(device_list, indent=2, ensure_ascii=False))
+                return
+        except Exception as e:
+            print(json.dumps({"error": str(e)}))
+            return
+    
+    # Original interactive mode
     logger.info("Iniciando demonstração do Device Manager")
     
     try:

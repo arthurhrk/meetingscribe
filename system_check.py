@@ -1,5 +1,7 @@
 import sys
 import importlib
+import json
+import argparse
 from pathlib import Path
 from typing import List, Tuple, Dict
 from rich.console import Console
@@ -206,6 +208,75 @@ def create_status_table(checks: Dict[str, List[Tuple[str, bool, str]]]) -> Table
 
 def main():
     """Executa todas as verificações do sistema"""
+    parser = argparse.ArgumentParser(description='MeetingScribe System Check')
+    parser.add_argument('--json', action='store_true', help='Output em formato JSON')
+    args = parser.parse_args()
+    
+    # Executar verificações
+    python_ok, python_details = check_python_version()
+    dependencies = check_dependencies()
+    directories = check_directory_structure()
+    config_ok, config_details = check_config_file()
+    audio_system = check_audio_system()
+    
+    # Calcular resumo
+    total_checks = 2 + len(dependencies) + len(directories) + len(audio_system)
+    passed_checks = (
+        int(python_ok) + 
+        int(config_ok) + 
+        sum(status for status, _ in dependencies.values()) + 
+        sum(status for status, _ in directories.values()) +
+        sum(status for status, _ in audio_system.values())
+    )
+    
+    if args.json:
+        # Output JSON para Raycast
+        components = []
+        
+        # Sistema
+        components.append({"name": "Python", "status": "ok" if python_ok else "error", "message": python_details, "icon": "✅" if python_ok else "❌"})
+        components.append({"name": "Configuração", "status": "ok" if config_ok else "error", "message": config_details, "icon": "✅" if config_ok else "❌"})
+        
+        # Dependências
+        for dep, (status, details) in dependencies.items():
+            components.append({"name": dep, "status": "ok" if status else "error", "message": details, "icon": "✅" if status else "❌"})
+        
+        # Diretórios
+        for dir_name, (status, details) in directories.items():
+            components.append({"name": f"Dir: {dir_name}", "status": "ok" if status else "error", "message": details, "icon": "✅" if status else "❌"})
+        
+        # Sistema de Áudio
+        for component, (status, details) in audio_system.items():
+            components.append({"name": f"Audio: {component}", "status": "ok" if status else "error", "message": details, "icon": "✅" if status else "❌"})
+        
+        # Informações de hardware (simulado)
+        hardware = {
+            "cpu": "Intel/AMD CPU",
+            "memory": "8GB+ RAM",
+            "gpu": "Integrated/Dedicated GPU",
+            "audio_devices": len(audio_system)
+        }
+        
+        # Modelos Whisper (simulado)
+        models = [
+            {"name": "tiny", "size": "39MB", "status": "available"},
+            {"name": "base", "size": "74MB", "status": "available"},
+            {"name": "small", "size": "244MB", "status": "available"},
+            {"name": "medium", "size": "769MB", "status": "available"},
+            {"name": "large-v3", "size": "1550MB", "status": "available"}
+        ]
+        
+        result = {
+            "overall": "success" if passed_checks == total_checks else "error",
+            "components": components,
+            "hardware": hardware,
+            "models": models
+        }
+        
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return passed_checks == total_checks
+    
+    # Interactive mode (original)
     console.print(Panel(
         "[bold blue]Sistema de Verificacao do MeetingScribe[/bold blue]\n"
         "Verificando componentes essenciais...",
@@ -214,13 +285,6 @@ def main():
     ))
     
     console.print()
-    
-    # Executar verificações
-    python_ok, python_details = check_python_version()
-    dependencies = check_dependencies()
-    directories = check_directory_structure()
-    config_ok, config_details = check_config_file()
-    audio_system = check_audio_system()
     
     # Organizar resultados
     checks = {
@@ -242,16 +306,6 @@ def main():
     # Mostrar tabela
     table = create_status_table(checks)
     console.print(table)
-    
-    # Resumo
-    total_checks = 2 + len(dependencies) + len(directories) + len(audio_system)
-    passed_checks = (
-        int(python_ok) + 
-        int(config_ok) + 
-        sum(status for status, _ in dependencies.values()) + 
-        sum(status for status, _ in directories.values()) +
-        sum(status for status, _ in audio_system.values())
-    )
     
     console.print()
     

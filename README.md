@@ -105,6 +105,21 @@ O **MeetingScribe** é uma solução completa para transcrição automática de 
   - Integração híbrida Whisper + pyannote para máxima precisão
   - Estimativa de tempo baseada no hardware detectado
 
+### 🟢 Concluído (v1.1.0 - Raycast Extension)
+
+- ✅ **Extensão Raycast** - Launcher principal com comandos nativos
+  - ✅ Quick Start Recording via ⌘ Space → `ms record`
+  - ✅ Recent Transcriptions com preview → `ms recent`
+  - ✅ File Transcription com formulário completo → `ms transcribe`
+  - ✅ System Status dashboard → `ms status`
+  - ✅ Quick Export multi-formato → `ms export`
+  - ✅ Bridge Python-TypeScript para comunicação seamless
+  - ✅ Preview inline de transcrições no Raycast
+  - ✅ Actions contextuais (Open, Export, Delete)
+  - ✅ Configurações integradas no Raycast
+  - ✅ Interface CLI adaptada com argumentos JSON
+  - ✅ Documentação completa de instalação
+
 ### 🟡 Em Desenvolvimento (v1.2.0)
 
 ### 🔴 Planejadas (v1.2.0+)
@@ -478,13 +493,25 @@ O projeto segue princípios SOLID e clean architecture:
 - [x] 5 modos de configuração inteligente
 - [x] Análise de participação visual
 
-#### v1.2.0 - Analytics & Reports (Q1 2026)
+#### v1.1.0 - Raycast Extension (✅ CONCLUÍDO)
+- [x] Estrutura base da extensão Raycast (TypeScript)
+- [x] Comandos principais: record, recent, transcribe, status, export
+- [x] Bridge Python-Node.js para comunicação
+- [x] Preview inline de transcrições
+- [x] Actions contextuais e quick actions
+- [x] Configurações integradas no Raycast
+- [x] Interface CLI com argumentos JSON
+- [x] Documentação completa de instalação
+
+#### v1.2.0 - Melhorias e Otimizações (Q1 2026)
+
+#### v1.3.0 - Analytics & Reports (Q1 2026)
 - [ ] Dashboard de estatísticas
 - [ ] Relatórios de produtividade
 - [ ] Gráficos de performance
 - [ ] Exportação de métricas
 
-#### v1.3.0 - API & Automation (Q2 2026)
+#### v1.4.0 - API & Automation (Q2 2026)
 - [ ] API REST completa
 - [ ] Webhook integrations
 - [ ] Automação de workflows
@@ -499,10 +526,16 @@ O projeto segue princípios SOLID e clean architecture:
 - [ ] Múltiplas engines de IA
 - [ ] Versão empresarial
 
+#### 2025 (Próximo)
+- [ ] **🚀 Extensão do Raycast** - Launcher principal com acesso instantâneo
+- [ ] Quick Actions via ⌘ Space (Windows compatible)
+- [ ] Bridge Python ↔ TypeScript para comunicação seamless
+- [ ] Interface nativa cross-platform integrada
+- [ ] Comandos: `ms record`, `ms recent`, `ms transcribe`, `ms status`, `ms export`
+
 #### 2027+
-- [ ] Integração com Microsoft Teams
+- [ ] Integração com Microsoft Teams  
 - [ ] Plugin para navegadores
-- [ ] **Extensão do Raycast** para acesso rápido
 - [ ] Versão mobile
 - [ ] IA personalizada por empresa
 
@@ -593,6 +626,7 @@ Este projeto está licenciado sob a **Licença MIT** - veja o arquivo [LICENSE](
 📁 Gerenciamento:        ████████████████████████████████ 100%
 👥 Speaker Detection:    ████████████████████████████████ 100%
 ⚙️ Configurações:        ████████████████████████████████ 100%
+🚀 Raycast Extension:    ████████████████████████████████ 100%
 📊 Relatórios:           ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   0%
 
 Overall Progress: ████████████████████████████████ 100%

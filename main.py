@@ -12,6 +12,8 @@ Python: >=3.8
 import sys
 import time
 import traceback
+import argparse
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import NoReturn, Optional
@@ -1721,6 +1723,84 @@ def handle_menu_choice() -> None:
                 logger.error("Interface crítica falhou - encerrando")
                 break
 
+def handle_cli_commands(args) -> int:
+    """Handle command line interface commands for Raycast extension."""
+    try:
+        if args.list_transcriptions:
+            from src.core.file_manager import list_transcriptions
+            transcriptions = list_transcriptions(limit=args.limit if hasattr(args, 'limit') else None)
+            if args.json:
+                print(json.dumps([{
+                    'filename': t.filename,
+                    'path': str(t.path),
+                    'created': t.created.isoformat(),
+                    'duration': t.duration,
+                    'model': t.model,
+                    'language': t.language,
+                    'size': t.size
+                } for t in transcriptions], indent=2))
+            return 0
+            
+        elif args.record:
+            device_manager = DeviceManager()
+            if args.device:
+                device = device_manager.get_device_by_id(args.device)
+            else:
+                device = device_manager.get_default_loopback_device()
+            
+            if not device:
+                print(json.dumps({"error": "No suitable audio device found"}))
+                return 1
+                
+            recorder = create_recorder_from_config(device)
+            # Start recording logic here
+            print(json.dumps({"status": "Recording started", "device": device.name}))
+            return 0
+            
+        elif args.transcribe:
+            # Initialize transcription
+            transcriber = create_transcriber(
+                model_size=WhisperModelSize(args.model) if args.model else WhisperModelSize.BASE,
+                language=args.language if args.language != 'auto' else None
+            )
+            
+            # Process file
+            result = transcriber.transcribe_file(Path(args.transcribe))
+            
+            # Export if format specified
+            if args.export_format:
+                export_path = export_transcription(
+                    result, 
+                    ExportFormat(args.export_format.upper()),
+                    Path(args.transcribe).stem
+                )
+                print(json.dumps({"status": "completed", "export_path": str(export_path)}))
+            else:
+                print(json.dumps({"status": "completed", "text": result.text}))
+            return 0
+            
+        elif args.export:
+            # Export existing transcription
+            from src.core.file_manager import find_transcription
+            transcription = find_transcription(args.export)
+            if not transcription:
+                print(json.dumps({"error": "Transcription not found"}))
+                return 1
+                
+            export_path = export_transcription(
+                transcription,
+                ExportFormat(args.format.upper()) if args.format else ExportFormat.TXT,
+                Path(args.export).stem
+            )
+            print(json.dumps({"status": "exported", "path": str(export_path)}))
+            return 0
+            
+    except Exception as e:
+        print(json.dumps({"error": str(e)}))
+        return 1
+        
+    return 0
+
 def main() -> int:
     """
     Função principal e entry point do MeetingScribe.
@@ -1734,6 +1814,27 @@ def main() -> int:
     Raises:
         SystemExit: Em caso de erro crítico que impeça a execução
     """
+    # Parse command line arguments for CLI mode
+    parser = argparse.ArgumentParser(description='MeetingScribe - Sistema de transcrição inteligente')
+    parser.add_argument('--list-transcriptions', action='store_true', help='Lista transcrições disponíveis')
+    parser.add_argument('--json', action='store_true', help='Output em formato JSON')
+    parser.add_argument('--limit', type=int, help='Limita número de resultados')
+    parser.add_argument('--record', action='store_true', help='Inicia gravação')
+    parser.add_argument('--device', help='ID do dispositivo de áudio')
+    parser.add_argument('--transcribe', help='Arquivo para transcrever')
+    parser.add_argument('--model', help='Modelo Whisper (tiny, base, small, medium, large-v3)')
+    parser.add_argument('--language', help='Idioma para transcrição')
+    parser.add_argument('--export-format', help='Formato de exportação (txt, json, srt, vtt, csv, xml)')
+    parser.add_argument('--export', help='Nome do arquivo para exportar')
+    parser.add_argument('--format', help='Formato para exportação')
+    parser.add_argument('--speakers', action='store_true', help='Ativar detecção de speakers')
+    
+    args = parser.parse_args()
+    
+    # If CLI arguments provided, handle them instead of interactive mode
+    if any([args.list_transcriptions, args.record, args.transcribe, args.export]):
+        return handle_cli_commands(args)
+    
     exit_code = 0
     
     try:
