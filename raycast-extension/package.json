@@ -1,10 +1,9 @@
 {
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "meetingscribe",
-  "title": "MeetingScribe",
+  "title": "Meetingscribe",
   "description": "Sistema inteligente de transcrição para reuniões com processamento 100% local usando IA",
-  "icon": "microphone.png",
-  "author": "arthurhrk",
+  "icon": "assets/icon.png",
   "license": "MIT",
   "version": "1.0.0",
   "commands": [
@@ -71,6 +70,20 @@
         "exportar",
         "txt",
         "json"
+      ]
+    },
+    {
+      "name": "teams-monitor",
+      "title": "Teams Auto Monitor",
+      "subtitle": "MeetingScribe",
+      "description": "Monitora Teams automaticamente e grava reuniões",
+      "mode": "view",
+      "keywords": [
+        "teams",
+        "auto",
+        "monitor",
+        "automatic",
+        "meeting"
       ]
     }
   ],

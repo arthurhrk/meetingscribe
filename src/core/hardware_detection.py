@@ -20,12 +20,8 @@ except ImportError:
     TORCH_AVAILABLE = False
     logger.debug("PyTorch não disponível para detecção de GPU")
 
-try:
-    import cpuinfo
-    CPU_INFO_AVAILABLE = True
-except ImportError:
-    CPU_INFO_AVAILABLE = False
-    logger.debug("py-cpuinfo não disponível - usando fallback")
+# cpuinfo será importado sob demanda para evitar crashes na inicialização
+CPU_INFO_AVAILABLE = None  # Será definido quando necessário
 
 
 class PerformanceLevel(Enum):
@@ -264,6 +260,16 @@ class HardwareDetector:
     def _detect_cpu(self) -> CPUInfo:
         """Detecta informações da CPU."""
         try:
+            # Tentar importar cpuinfo sob demanda
+            global CPU_INFO_AVAILABLE
+            if CPU_INFO_AVAILABLE is None:
+                try:
+                    import cpuinfo
+                    CPU_INFO_AVAILABLE = True
+                except (ImportError, Exception) as e:
+                    CPU_INFO_AVAILABLE = False
+                    logger.debug(f"py-cpuinfo não disponível - usando fallback: {e}")
+            
             if CPU_INFO_AVAILABLE:
                 info = cpuinfo.get_cpu_info()
                 name = info.get('brand_raw', 'Unknown CPU')

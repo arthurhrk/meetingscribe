@@ -91,7 +91,7 @@ class TranscriptionConfig:
     """Configuração para transcrição."""
     model_size: WhisperModelSize = WhisperModelSize.BASE
     language: Optional[str] = None  # None para auto-detecção
-    compute_type: str = "float16"  # float16, float32, int8
+    compute_type: str = "float32"  # float16, float32, int8
     device: str = "auto"  # auto, cpu, cuda
     beam_size: int = 5
     temperature: float = 0.0
@@ -407,7 +407,7 @@ class WhisperTranscriber:
 def create_transcriber(
     model_size: WhisperModelSize = WhisperModelSize.BASE,
     language: Optional[str] = None,
-    use_gpu: bool = True
+    use_gpu: bool = False  # Mudado para False por padrão para evitar problemas
 ) -> WhisperTranscriber:
     """
     Factory function para criar um transcritor configurado.
@@ -420,11 +420,18 @@ def create_transcriber(
     Returns:
         WhisperTranscriber configurado
     """
+    # Auto-detectar GPU disponível
+    try:
+        import torch
+        gpu_available = torch.cuda.is_available() and use_gpu
+    except ImportError:
+        gpu_available = False
+    
     config = TranscriptionConfig(
         model_size=model_size,
         language=language,
-        device="auto" if use_gpu else "cpu",
-        compute_type="float16" if use_gpu else "float32"
+        device="auto" if gpu_available else "cpu",
+        compute_type="float16" if gpu_available else "float32"
     )
     
     return WhisperTranscriber(config)

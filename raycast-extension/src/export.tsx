@@ -1,4 +1,13 @@
-import { ActionPanel, Action, List, Form, showToast, Toast, getPreferenceValues, popToRoot } from "@raycast/api";
+import {
+  ActionPanel,
+  Action,
+  List,
+  Form,
+  showToast,
+  Toast,
+  getPreferenceValues,
+  popToRoot,
+} from "@raycast/api";
 import { useState, useEffect } from "react";
 import { exec } from "child_process";
 import { promisify } from "util";
@@ -26,7 +35,7 @@ const exportFormats = [
   { title: "SRT - Legendas para vídeo", value: "srt" },
   { title: "VTT - WebVTT para web", value: "vtt" },
   { title: "XML - Estruturado para processamento", value: "xml" },
-  { title: "CSV - Planilha com dados segmentados", value: "csv" }
+  { title: "CSV - Planilha com dados segmentados", value: "csv" },
 ];
 
 export default function QuickExport() {
@@ -44,16 +53,31 @@ export default function QuickExport() {
     try {
       setIsLoading(true);
       const { stdout } = await execAsync(
-        `cd "${preferences.projectPath}" && ${preferences.pythonPath} main.py --list-transcriptions --json --limit 10`
+        `cd "${preferences.projectPath}" && ${preferences.pythonPath} main.py --list-transcriptions --json --limit 10`,
       );
+
+      // Extrair JSON do stdout, ignorando logs coloridos
+      let jsonStr = stdout;
+      const lines = stdout.split('\n');
+      const jsonStartIndex = lines.findIndex(line => line.trim().startsWith('[') || line.trim().startsWith('{'));
       
-      const data = JSON.parse(stdout);
+      if (jsonStartIndex !== -1) {
+        jsonStr = lines.slice(jsonStartIndex).join('\n');
+        const jsonLines = jsonStr.split('\n');
+        const jsonEndIndex = jsonLines.findLastIndex(line => line.trim().endsWith(']') || line.trim().endsWith('}'));
+        
+        if (jsonEndIndex !== -1) {
+          jsonStr = jsonLines.slice(0, jsonEndIndex + 1).join('\n');
+        }
+      }
+
+      const data = JSON.parse(jsonStr);
       setTranscriptions(data);
     } catch (error) {
       showToast({
         style: Toast.Style.Failure,
         title: "Erro ao carregar transcrições",
-        message: "Verifique se existem transcrições disponíveis"
+        message: "Verifique se existem transcrições disponíveis",
       });
     } finally {
       setIsLoading(false);
@@ -65,23 +89,23 @@ export default function QuickExport() {
       showToast({
         style: Toast.Style.Animated,
         title: "Exportando...",
-        message: `${filename} → ${format.toUpperCase()}`
+        message: `${filename} → ${format.toUpperCase()}`,
       });
 
       await execAsync(
-        `cd "${preferences.projectPath}" && ${preferences.pythonPath} main.py --export "${filename}" --format ${format}`
+        `cd "${preferences.projectPath}" && ${preferences.pythonPath} main.py --export "${filename}" --format ${format}`,
       );
 
       showToast({
         style: Toast.Style.Success,
         title: "Exportação concluída!",
-        message: `Arquivo salvo em ${format.toUpperCase()}`
+        message: `Arquivo salvo em ${format.toUpperCase()}`,
       });
     } catch (error) {
       showToast({
         style: Toast.Style.Failure,
         title: "Erro na exportação",
-        message: String(error)
+        message: String(error),
       });
     }
   }
@@ -96,10 +120,7 @@ export default function QuickExport() {
       <Form
         actions={
           <ActionPanel>
-            <Action.SubmitForm
-              title="Exportar"
-              onSubmit={handleFormSubmit}
-            />
+            <Action.SubmitForm title="Exportar" onSubmit={handleFormSubmit} />
             <Action
               title="Voltar"
               onAction={() => setShowForm(false)}
@@ -123,21 +144,22 @@ export default function QuickExport() {
   }
 
   return (
-    <List isLoading={isLoading} searchBarPlaceholder="Buscar transcrições para exportar...">
+    <List
+      isLoading={isLoading}
+      searchBarPlaceholder="Buscar transcrições para exportar..."
+    >
       <List.Section title="Transcrições Disponíveis para Exportação">
         {transcriptions.map((transcription) => (
           <List.Item
             key={transcription.filename}
             title={transcription.filename}
             subtitle={`${transcription.duration} • ${transcription.language} • ${transcription.created}`}
-            accessories={[
-              { text: transcription.model }
-            ]}
+            accessories={[{ text: transcription.model }]}
             actions={
               <ActionPanel>
                 <ActionPanel.Section title="Exportação Rápida">
                   <Action
-                    title="TXT"
+                    title="Txt"
                     onAction={() => quickExport(transcription.filename, "txt")}
                   />
                   <Action
@@ -145,13 +167,13 @@ export default function QuickExport() {
                     onAction={() => quickExport(transcription.filename, "json")}
                   />
                   <Action
-                    title="SRT"
+                    title="Srt"
                     onAction={() => quickExport(transcription.filename, "srt")}
                   />
                 </ActionPanel.Section>
                 <ActionPanel.Section title="Mais Opções">
                   <Action
-                    title="Escolher Formato..."
+                    title="Escolher Formato…"
                     onAction={() => {
                       setSelectedFile(transcription.filename);
                       setShowForm(true);
@@ -180,15 +202,19 @@ export default function QuickExport() {
             actions={
               <ActionPanel>
                 <Action
-                  title="TXT (Rápido)"
-                  onAction={() => quickExport(transcriptions[0].filename, "txt")}
+                  title="Txt (rápido)"
+                  onAction={() =>
+                    quickExport(transcriptions[0].filename, "txt")
+                  }
                 />
                 <Action
-                  title="JSON (Rápido)"
-                  onAction={() => quickExport(transcriptions[0].filename, "json")}
+                  title="JSON (rápido)"
+                  onAction={() =>
+                    quickExport(transcriptions[0].filename, "json")
+                  }
                 />
                 <Action
-                  title="Escolher Formato..."
+                  title="Escolher Formato…"
                   onAction={() => {
                     setSelectedFile(transcriptions[0].filename);
                     setShowForm(true);

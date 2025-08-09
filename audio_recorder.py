@@ -144,33 +144,37 @@ class AudioRecorder:
         """
         try:
             with DeviceManager() as dm:
-                device = dm.get_default_speakers()
+                # Usar função específica para dispositivos adequados para gravação
+                recording_devices = dm.get_recording_capable_devices()
                 
-                if device:
-                    # Configurar para usar dispositivo WASAPI loopback se disponível
-                    wasapi_devices = dm.get_devices_by_api('Windows WASAPI')
-                    loopback_devices = [d for d in wasapi_devices if d.is_loopback]
+                if recording_devices:
+                    # Pegar o primeiro dispositivo adequado (já ordenado por preferência)
+                    device = recording_devices[0]
                     
-                    if loopback_devices:
-                        # Preferir dispositivo loopback que corresponda ao padrão
-                        for loopback in loopback_devices:
-                            if device.name.lower() in loopback.name.lower():
-                                device = loopback
-                                break
+                    # Verificar se tem canais de entrada válidos
+                    if device.max_input_channels == 0:
+                        logger.warning(f"Dispositivo {device.name} não tem canais de entrada, procurando alternativa...")
+                        
+                        # Procurar por dispositivos com canais de entrada válidos
+                        valid_devices = [d for d in recording_devices if d.max_input_channels > 0]
+                        if valid_devices:
+                            device = valid_devices[0]
                         else:
-                            # Se não encontrar correspondência, usar primeiro loopback
-                            device = loopback_devices[0]
+                            logger.error("Nenhum dispositivo com canais de entrada válidos encontrado")
+                            return False
+                    
+                    channels = min(device.max_input_channels, 2) if device.max_input_channels > 0 else 1
                     
                     self._config = RecordingConfig(
                         device=device,
                         sample_rate=int(device.default_sample_rate),
-                        channels=min(device.max_input_channels, 2) or 1
+                        channels=channels
                     )
                     
-                    logger.info(f"Dispositivo configurado automaticamente: {device.name}")
+                    logger.info(f"Dispositivo configurado automaticamente: {device.name} (canais: {channels})")
                     return True
                 
-                logger.warning("Nenhum dispositivo adequado encontrado")
+                logger.warning("Nenhum dispositivo adequado para gravação encontrado")
                 return False
                 
         except Exception as e:
@@ -227,16 +231,24 @@ class AudioRecorder:
         self._frames = []
         
         try:
-            # Abrir stream de áudio
-            self._stream = self._audio.open(
-                format=self._config.format,
-                channels=self._config.channels,
-                rate=self._config.sample_rate,
-                input=True,
-                input_device_index=self._config.device.index,
-                frames_per_buffer=self._config.chunk_size,
-                as_loopback=getattr(self._config.device, 'is_loopback', False)
-            )
+            # Abrir stream de áudio com configuração específica para loopback
+            stream_config = {
+                'format': self._config.format,
+                'channels': self._config.channels,
+                'rate': self._config.sample_rate,
+                'input': True,
+                'input_device_index': self._config.device.index,
+                'frames_per_buffer': self._config.chunk_size
+            }
+            
+            # Configuração especial para dispositivos WASAPI loopback
+            if hasattr(self._config.device, 'is_loopback') and self._config.device.is_loopback:
+                logger.debug("Configurando stream para dispositivo WASAPI loopback")
+                # Para pyaudiowpatch, dispositivos loopback não precisam do parâmetro as_loopback
+                # O device index já identifica o dispositivo loopback correto
+            
+            logger.debug(f"Configuração do stream: {stream_config}")
+            self._stream = self._audio.open(**stream_config)
             
             logger.info(f"Stream de áudio aberto para dispositivo {self._config.device.name}")
             
@@ -276,9 +288,27 @@ class AudioRecorder:
                 
                 # Ler dados do stream
                 try:
-                    data = self._stream.read(self._config.chunk_size, exception_on_overflow=False)
-                    self._frames.append(data)
-                    self._stats.samples_recorded += self._config.chunk_size
+                    if not self._stream or self._stream.is_stopped():
+                        logger.error("Stream de áudio foi interrompido")
+                        break
+                    
+                    # Tentar ler com timeout para evitar travamento
+                    try:
+                        data = self._stream.read(self._config.chunk_size, exception_on_overflow=False)
+                        logger.debug(f"Dados lidos do stream: {len(data)} bytes")
+                    except OSError as e:
+                        logger.error(f"Erro OSError na leitura do stream: {e}")
+                        if "unanticipated host error" in str(e) or "device unavailable" in str(e):
+                            logger.error("Dispositivo WASAPI não disponível, parando gravação")
+                            break
+                        raise
+                    
+                    if len(data) > 0:
+                        self._frames.append(data)
+                        self._stats.samples_recorded += self._config.chunk_size
+                        logger.debug(f"Total de frames gravados: {len(self._frames)}")
+                    else:
+                        logger.warning("Nenhum dado capturado do stream de áudio")
                     
                     # Chamar callback de progresso
                     if self._progress_callback:
@@ -287,9 +317,16 @@ class AudioRecorder:
                         except Exception as e:
                             logger.warning(f"Erro no callback de progresso: {e}")
                     
+                    # Pequena pausa para evitar 100% CPU
+                    time.sleep(0.001)
+                    
                 except Exception as e:
                     logger.warning(f"Erro ao ler dados de áudio: {e}")
-                    # Continuar gravação mesmo com erros pontuais
+                    # Se o erro é crítico, parar a gravação
+                    if "invalid" in str(e).lower() or "closed" in str(e).lower():
+                        logger.error("Stream inválido, parando gravação")
+                        break
+                    # Continuar gravação para outros tipos de erro
                     
         except Exception as e:
             logger.error(f"Erro crítico na thread de gravação: {e}")
@@ -353,6 +390,7 @@ class AudioRecorder:
         Raises:
             AudioRecorderError: Se não conseguir salvar o arquivo
         """
+        logger.debug(f"Tentando salvar gravação com {len(self._frames)} frames")
         if not self._frames:
             raise AudioRecorderError("Nenhum dado de áudio para salvar")
         

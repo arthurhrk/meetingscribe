@@ -10,8 +10,8 @@ load_dotenv()
 class Settings(BaseSettings):
     app_name: str = "MeetingScribe"
     app_version: str = "1.0.0"
-    debug: bool = False
-    log_level: str = "INFO"
+    debug: bool = True
+    log_level: str = "DEBUG"
     
     base_dir: Path = Path(__file__).parent
     storage_dir: Path = base_dir / "storage"
@@ -55,7 +55,7 @@ def setup_logging():
         settings.logs_dir / "meetingscribe.log",
         rotation="10 MB",
         retention="1 month",
-        level="INFO",
+        level=settings.log_level,
         format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {message}"
     )
     

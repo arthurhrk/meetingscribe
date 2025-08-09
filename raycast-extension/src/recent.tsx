@@ -1,9 +1,17 @@
-import { ActionPanel, Action, List, showToast, Toast, getPreferenceValues, Detail } from "@raycast/api";
+import {
+  ActionPanel,
+  Action,
+  List,
+  showToast,
+  Toast,
+  getPreferenceValues,
+  Detail,
+} from "@raycast/api";
 import { useState, useEffect } from "react";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { readFileSync, existsSync } from "fs";
-import { join } from "path";
+// import { join } from "path"; // Unused import removed
 
 const execAsync = promisify(exec);
 
@@ -36,16 +44,31 @@ export default function RecentTranscriptions() {
     try {
       setIsLoading(true);
       const { stdout } = await execAsync(
-        `cd "${preferences.projectPath}" && ${preferences.pythonPath} main.py --list-transcriptions --json`
+        `cd "${preferences.projectPath}" && ${preferences.pythonPath} main.py --list-transcriptions --json`,
       );
+
+      // Extrair JSON do stdout, ignorando logs coloridos
+      let jsonStr = stdout;
+      const lines = stdout.split('\n');
+      const jsonStartIndex = lines.findIndex(line => line.trim().startsWith('[') || line.trim().startsWith('{'));
       
-      const data = JSON.parse(stdout);
+      if (jsonStartIndex !== -1) {
+        jsonStr = lines.slice(jsonStartIndex).join('\n');
+        const jsonLines = jsonStr.split('\n');
+        const jsonEndIndex = jsonLines.findLastIndex(line => line.trim().endsWith(']') || line.trim().endsWith('}'));
+        
+        if (jsonEndIndex !== -1) {
+          jsonStr = jsonLines.slice(0, jsonEndIndex + 1).join('\n');
+        }
+      }
+
+      const data = JSON.parse(jsonStr);
       setTranscriptions(data);
     } catch (error) {
       showToast({
         style: Toast.Style.Failure,
         title: "Erro ao carregar transcrições",
-        message: "Verifique se existem transcrições disponíveis"
+        message: "Verifique se existem transcrições disponíveis",
       });
     } finally {
       setIsLoading(false);
@@ -58,13 +81,13 @@ export default function RecentTranscriptions() {
       showToast({
         style: Toast.Style.Success,
         title: "Arquivo aberto",
-        message: "Transcrição aberta no editor"
+        message: "Transcrição aberta no editor",
       });
     } catch (error) {
       showToast({
         style: Toast.Style.Failure,
         title: "Erro ao abrir arquivo",
-        message: String(error)
+        message: String(error),
       });
     }
   }
@@ -74,23 +97,23 @@ export default function RecentTranscriptions() {
       showToast({
         style: Toast.Style.Animated,
         title: "Exportando...",
-        message: `Formato: ${format.toUpperCase()}`
+        message: `Formato: ${format.toUpperCase()}`,
       });
 
       await execAsync(
-        `cd "${preferences.projectPath}" && ${preferences.pythonPath} main.py --export "${filename}" --format ${format}`
+        `cd "${preferences.projectPath}" && ${preferences.pythonPath} main.py --export "${filename}" --format ${format}`,
       );
 
       showToast({
         style: Toast.Style.Success,
         title: "Exportação concluída!",
-        message: `Arquivo exportado em ${format.toUpperCase()}`
+        message: `Arquivo exportado em ${format.toUpperCase()}`,
       });
     } catch (error) {
       showToast({
         style: Toast.Style.Failure,
         title: "Erro na exportação",
-        message: String(error)
+        message: String(error),
       });
     }
   }
@@ -98,9 +121,9 @@ export default function RecentTranscriptions() {
   function getTranscriptionPreview(path: string): string {
     try {
       if (existsSync(path)) {
-        const content = readFileSync(path, 'utf-8');
+        const content = readFileSync(path, "utf-8");
         // Return first 200 characters as preview
-        return content.substring(0, 200) + (content.length > 200 ? '...' : '');
+        return content.substring(0, 200) + (content.length > 200 ? "..." : "");
       }
       return "Preview não disponível";
     } catch {
@@ -118,7 +141,7 @@ export default function RecentTranscriptions() {
             subtitle={`${transcription.duration} • ${transcription.language} • ${transcription.model}`}
             accessories={[
               { text: transcription.created },
-              { text: transcription.size }
+              { text: transcription.size },
             ]}
             actions={
               <ActionPanel>
@@ -132,7 +155,9 @@ export default function RecentTranscriptions() {
                           <ActionPanel>
                             <Action
                               title="Abrir Arquivo Completo"
-                              onAction={() => openTranscription(transcription.path)}
+                              onAction={() =>
+                                openTranscription(transcription.path)
+                              }
                             />
                           </ActionPanel>
                         }
@@ -140,22 +165,28 @@ export default function RecentTranscriptions() {
                     }
                   />
                   <Action
-                    title="Abrir no Editor"
+                    title="Abrir No Editor"
                     onAction={() => openTranscription(transcription.path)}
                   />
                 </ActionPanel.Section>
                 <ActionPanel.Section title="Exportar">
                   <Action
-                    title="Exportar como TXT"
-                    onAction={() => exportTranscription(transcription.filename, "txt")}
+                    title="Exportar Como Txt"
+                    onAction={() =>
+                      exportTranscription(transcription.filename, "txt")
+                    }
                   />
                   <Action
-                    title="Exportar como JSON"
-                    onAction={() => exportTranscription(transcription.filename, "json")}
+                    title="Exportar Como JSON"
+                    onAction={() =>
+                      exportTranscription(transcription.filename, "json")
+                    }
                   />
                   <Action
-                    title="Exportar como SRT"
-                    onAction={() => exportTranscription(transcription.filename, "srt")}
+                    title="Exportar Como Srt"
+                    onAction={() =>
+                      exportTranscription(transcription.filename, "srt")
+                    }
                   />
                 </ActionPanel.Section>
                 <ActionPanel.Section title="Atualizar">

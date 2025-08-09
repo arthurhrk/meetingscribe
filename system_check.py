@@ -12,6 +12,9 @@ from rich import box
 
 console = Console()
 
+# Verificar se é modo JSON antes de inicializar logs
+JSON_MODE = '--json' in sys.argv
+
 def check_python_version() -> Tuple[bool, str]:
     """Verifica se a versão do Python é >= 3.8"""
     version = sys.version_info
@@ -87,6 +90,16 @@ def check_config_file() -> Tuple[bool, str]:
 def check_audio_system() -> Dict[str, Tuple[bool, str]]:
     """Verifica sistema de áudio e dispositivos disponíveis"""
     results = {}
+    
+    # Silenciar logs se estiver em modo JSON
+    if JSON_MODE:
+        import os
+        os.environ['LOG_LEVEL'] = 'CRITICAL'
+        # Silenciar stderr temporariamente para evitar logs coloridos
+        import sys
+        from io import StringIO
+        original_stderr = sys.stderr
+        sys.stderr = StringIO()
     
     # Verificar se pyaudiowpatch está disponível
     try:
@@ -175,6 +188,11 @@ def check_audio_system() -> Dict[str, Tuple[bool, str]]:
             
     except ImportError as e:
         results['AudioRecorder'] = (False, f"Erro de importação: {e}")
+    
+    # Restaurar stderr se foi silenciado
+    if JSON_MODE and 'original_stderr' in locals():
+        import sys
+        sys.stderr = original_stderr
     
     return results
 
@@ -273,7 +291,7 @@ def main():
             "models": models
         }
         
-        print(json.dumps(result, indent=2, ensure_ascii=False))
+        print(json.dumps(result, indent=2, ensure_ascii=True))
         return passed_checks == total_checks
     
     # Interactive mode (original)

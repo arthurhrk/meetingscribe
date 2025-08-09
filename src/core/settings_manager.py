@@ -38,7 +38,7 @@ class WhisperSettings:
     model_size: str = "base"
     language: Optional[str] = None
     device: str = "auto"
-    compute_type: str = "float16"
+    compute_type: str = "float32"
     beam_size: int = 5
     temperature: float = 0.0
     condition_on_previous_text: bool = True

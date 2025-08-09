@@ -351,6 +351,59 @@ class DeviceManager:
         devices = self.list_all_devices()
         return [d for d in devices if api_name.lower() in d.host_api.lower()]
     
+    def get_recording_capable_devices(self) -> List[AudioDevice]:
+        """
+        Filtra dispositivos adequados para gravação (com canais de entrada > 0).
+        
+        Returns:
+            List[AudioDevice]: Lista de dispositivos que podem ser usados para gravação
+        """
+        devices = self.list_all_devices()
+        recording_devices = [d for d in devices if d.max_input_channels > 0]
+        
+        # Ordenar por preferência: WASAPI loopback primeiro, depois default, depois outros
+        def sort_key(device):
+            score = 0
+            if device.host_api.lower() == 'windows wasapi':
+                score += 30
+            if device.is_loopback:
+                score += 20  
+            if device.is_default:
+                score += 10
+            return -score  # Negativo para ordem decrescente
+        
+        return sorted(recording_devices, key=sort_key)
+    
+    def get_system_default_input(self) -> Optional[AudioDevice]:
+        """
+        Obtém o dispositivo de entrada padrão do sistema.
+        
+        Returns:
+            Optional[AudioDevice]: Dispositivo de entrada padrão ou None
+        """
+        try:
+            default_input_info = self._audio.get_default_input_device_info()
+            if default_input_info:
+                return self.get_device_by_index(default_input_info['index'])
+        except Exception as e:
+            logger.debug(f"Erro ao obter dispositivo de entrada padrão: {e}")
+        return None
+    
+    def get_system_default_output(self) -> Optional[AudioDevice]:
+        """
+        Obtém o dispositivo de saída padrão do sistema.
+        
+        Returns:
+            Optional[AudioDevice]: Dispositivo de saída padrão ou None
+        """
+        try:
+            default_output_info = self._audio.get_default_output_device_info()
+            if default_output_info:
+                return self.get_device_by_index(default_output_info['index'])
+        except Exception as e:
+            logger.debug(f"Erro ao obter dispositivo de saída padrão: {e}")
+        return None
+    
     def print_device_info(self, device: AudioDevice) -> None:
         """
         Imprime informações detalhadas de um dispositivo.
@@ -399,18 +452,67 @@ def main():
     """
     parser = argparse.ArgumentParser(description='MeetingScribe Device Manager')
     parser.add_argument('--list-json', action='store_true', help='Lista dispositivos em formato JSON')
+    parser.add_argument('--recording-only', action='store_true', help='Lista apenas dispositivos adequados para gravação')
     args = parser.parse_args()
     
     if args.list_json:
         try:
             with DeviceManager() as dm:
-                devices = dm.list_all_devices()
-                device_list = []
-                
-                for device in devices:
-                    device_dict = asdict(device)
-                    device_dict['id'] = str(device.index)
-                    device_list.append(device_dict)
+                if args.recording_only:
+                    # Lista apenas dispositivos adequados para gravação, com opções "Same as System"
+                    devices = dm.get_recording_capable_devices()
+                    device_list = []
+                    
+                    # Procurar melhor dispositivo de loopback padrão
+                    default_speakers = dm.get_default_speakers()
+                    if default_speakers and default_speakers.max_input_channels > 0:
+                        device_list.append({
+                            "id": "system_output",
+                            "name": "Same as System (Output Loopback)",
+                            "index": default_speakers.index,
+                            "max_input_channels": default_speakers.max_input_channels,
+                            "max_output_channels": default_speakers.max_output_channels,
+                            "default_sample_rate": default_speakers.default_sample_rate,
+                            "host_api": default_speakers.host_api,
+                            "is_loopback": default_speakers.is_loopback,
+                            "is_default": True,
+                            "is_system_default": True
+                        })
+                    
+                    # Adicionar opção para input padrão se for diferente e adequado
+                    default_input = dm.get_system_default_input()
+                    if (default_input and default_input.max_input_channels > 0 and 
+                        (not default_speakers or default_input.index != default_speakers.index)):
+                        device_list.append({
+                            "id": "system_input",
+                            "name": "Same as System (Microphone)",
+                            "index": default_input.index,
+                            "max_input_channels": default_input.max_input_channels,
+                            "max_output_channels": default_input.max_output_channels,
+                            "default_sample_rate": default_input.default_sample_rate,
+                            "host_api": default_input.host_api,
+                            "is_loopback": default_input.is_loopback,
+                            "is_default": True,
+                            "is_system_default": True
+                        })
+                    
+                    # Adicionar dispositivos adequados para gravação (apenas com canais de entrada > 0)
+                    for device in devices:
+                        if device.max_input_channels > 0:  # Filtro adicional
+                            device_dict = asdict(device)
+                            device_dict['id'] = str(device.index)
+                            device_dict['is_system_default'] = False
+                            device_list.append(device_dict)
+                else:
+                    # Lista todos os dispositivos
+                    devices = dm.list_all_devices()
+                    device_list = []
+                    
+                    for device in devices:
+                        device_dict = asdict(device)
+                        device_dict['id'] = str(device.index)
+                        device_dict['is_system_default'] = False
+                        device_list.append(device_dict)
                 
                 print(json.dumps(device_list, indent=2, ensure_ascii=False))
                 return

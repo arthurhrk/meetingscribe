@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(python:*)",
+      "Bash(git commit:*)",
+      "Bash(git rm:*)",
+      "WebFetch(domain:developers.raycast.com)",
+      "Bash(node:*)",
+      "Bash(powershell:*)",
+      "Bash(npx ray:*)",
+      "WebFetch(domain:github.com)"
+    ],
+    "deny": []
+  }
+}

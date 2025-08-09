@@ -1734,27 +1734,108 @@ def handle_cli_commands(args) -> int:
                     'filename': t.filename,
                     'path': str(t.path),
                     'created': t.created.isoformat(),
-                    'duration': t.duration,
+                    'duration': f"{t.duration:.1f}s",
                     'model': t.model,
                     'language': t.language,
-                    'size': t.size
+                    'size': f"{t.path.stat().st_size} bytes" if t.path.exists() else "0 bytes"
                 } for t in transcriptions], indent=2))
             return 0
             
         elif args.record:
             device_manager = DeviceManager()
+            
             if args.device:
-                device = device_manager.get_device_by_id(args.device)
+                # Tratar opções especiais "Same as System"
+                if args.device == "system_input":
+                    device = device_manager.get_system_default_input()
+                elif args.device == "system_output":
+                    device = device_manager.get_system_default_output()
+                else:
+                    # Dispositivo específico por índice
+                    try:
+                        device = device_manager.get_device_by_index(int(args.device))
+                    except ValueError:
+                        print(json.dumps({"error": "Invalid device ID"}))
+                        return 1
             else:
-                device = device_manager.get_default_loopback_device()
+                # Usar dispositivo padrão
+                device = device_manager.get_default_speakers()
             
             if not device:
                 print(json.dumps({"error": "No suitable audio device found"}))
                 return 1
+            
+            # Verificar se o dispositivo tem canais de entrada adequados
+            if device.max_input_channels == 0:
+                print(json.dumps({"error": f"Invalid audio channels: device '{device.name}' has 0 input channels"}))
+                return 1
                 
-            recorder = create_recorder_from_config(device)
-            # Start recording logic here
-            print(json.dumps({"status": "Recording started", "device": device.name}))
+            from audio_recorder import AudioRecorder
+            from datetime import datetime
+            import threading
+            import signal
+            import os
+            
+            # Generate filename with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"meeting_recording_{timestamp}.wav"
+            recording_path = settings.recordings_dir / filename
+            
+            # Create recorder with specific device
+            from audio_recorder import RecordingConfig
+            
+            config = RecordingConfig(
+                device=device,
+                sample_rate=int(device.default_sample_rate),  # Use device's native sample rate
+                channels=device.max_input_channels,  # Use device's native channels
+                output_dir=settings.recordings_dir
+            )
+            
+            recorder = AudioRecorder(config=config)
+            
+            # Start recording
+            success = recorder.start_recording(str(recording_path))
+            if not success:
+                print(json.dumps({"error": "Failed to start recording"}))
+                return 1
+            
+            print(json.dumps({
+                "status": "Recording started", 
+                "device": device.name,
+                "file": str(recording_path),
+                "message": "Recording will continue until process is stopped (Ctrl+C)"
+            }))
+            
+            # Record for specified duration or until interrupted
+            try:
+                duration = args.duration if (hasattr(args, 'duration') and args.duration) else None
+                if duration:
+                    print(f"Recording for {duration} seconds... Press Ctrl+C to stop early", file=sys.stderr)
+                    for i in range(duration):
+                        time.sleep(1)
+                        if not recorder.is_recording:
+                            break
+                else:
+                    print("Recording continuously... Press Ctrl+C to stop", file=sys.stderr)
+                    while recorder.is_recording:
+                        time.sleep(1)
+                        
+            except KeyboardInterrupt:
+                print("\nStopping recording early...", file=sys.stderr)
+            finally:
+                final_path = recorder.stop_recording()
+                if final_path:
+                    file_size = os.path.getsize(final_path) if os.path.exists(final_path) else 0
+                    print(json.dumps({
+                        "status": "Recording stopped",
+                        "file": final_path,
+                        "size_bytes": file_size
+                    }))
+                else:
+                    print(json.dumps({"error": "Failed to stop recording properly"}))
+                    
+                recorder.close()
+            
             return 0
             
         elif args.transcribe:
@@ -1828,6 +1909,7 @@ def main() -> int:
     parser.add_argument('--export', help='Nome do arquivo para exportar')
     parser.add_argument('--format', help='Formato para exportação')
     parser.add_argument('--speakers', action='store_true', help='Ativar detecção de speakers')
+    parser.add_argument('--duration', type=int, help='Duração da gravação em segundos (para CLI)', default=None)
     
     args = parser.parse_args()
     

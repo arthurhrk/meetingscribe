@@ -1,4 +1,12 @@
-import { ActionPanel, Action, Form, showToast, Toast, getPreferenceValues, popToRoot } from "@raycast/api";
+import {
+  ActionPanel,
+  Action,
+  Form,
+  showToast,
+  Toast,
+  getPreferenceValues,
+  popToRoot,
+} from "@raycast/api";
 import { useState } from "react";
 import { exec } from "child_process";
 import { promisify } from "util";
@@ -24,7 +32,7 @@ const whisperModels = [
   { title: "Base (Equilibrado)", value: "base" },
   { title: "Small (Boa precisão)", value: "small" },
   { title: "Medium (Alta precisão)", value: "medium" },
-  { title: "Large-v3 (Máxima precisão)", value: "large-v3" }
+  { title: "Large-v3 (Máxima precisão)", value: "large-v3" },
 ];
 
 const languages = [
@@ -34,7 +42,7 @@ const languages = [
   { title: "Español", value: "es" },
   { title: "Français", value: "fr" },
   { title: "Deutsch", value: "de" },
-  { title: "Italiano", value: "it" }
+  { title: "Italiano", value: "it" },
 ];
 
 const exportFormats = [
@@ -42,7 +50,7 @@ const exportFormats = [
   { title: "JSON (Estruturado)", value: "json" },
   { title: "SRT (Legendas)", value: "srt" },
   { title: "VTT (WebVTT)", value: "vtt" },
-  { title: "CSV (Planilha)", value: "csv" }
+  { title: "CSV (Planilha)", value: "csv" },
 ];
 
 export default function TranscribeFile() {
@@ -54,7 +62,7 @@ export default function TranscribeFile() {
       showToast({
         style: Toast.Style.Failure,
         title: "Erro",
-        message: "Selecione um arquivo de áudio"
+        message: "Selecione um arquivo de áudio",
       });
       return;
     }
@@ -64,7 +72,7 @@ export default function TranscribeFile() {
       showToast({
         style: Toast.Style.Animated,
         title: "Iniciando transcrição...",
-        message: `Modelo: ${values.model} | Idioma: ${values.language}`
+        message: `Modelo: ${values.model} | Idioma: ${values.language}`,
       });
 
       const audioFilePath = values.audioFile[0];
@@ -82,12 +90,12 @@ export default function TranscribeFile() {
         command += ` --export-format ${values.exportFormat}`;
       }
 
-      const { stdout, stderr } = await execAsync(command);
+      await execAsync(command);
 
       showToast({
         style: Toast.Style.Success,
         title: "Transcrição concluída!",
-        message: "Arquivo processado com sucesso"
+        message: "Arquivo processado com sucesso",
       });
 
       popToRoot();
@@ -95,7 +103,7 @@ export default function TranscribeFile() {
       showToast({
         style: Toast.Style.Failure,
         title: "Erro na transcrição",
-        message: String(error)
+        message: String(error),
       });
     } finally {
       setIsLoading(false);
