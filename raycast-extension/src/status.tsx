@@ -31,7 +31,7 @@ interface SystemStatus {
     cpu: string;
     memory: string;
     gpu: string;
-    audio_devices: number;
+    audio_devices: string;
   };
   models: {
     name: string;

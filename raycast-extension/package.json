@@ -3,7 +3,7 @@
   "name": "meetingscribe",
   "title": "Meetingscribe",
   "description": "An intelligent meeting transcription system with 100% local processing using AI.",
-  "icon": "assets/icon.svg",
+  "icon": "assets/icon.png",
   "author": "Arthurhrk",
   "license": "MIT",
   "version": "1.0.0",
@@ -90,6 +90,83 @@
         "automatic",
         "meeting"
       ]
+    },
+    {
+      "name": "performance",
+      "title": "Performance Dashboard",
+      "subtitle": "MeetingScribe",
+      "description": "View detailed performance metrics and system status",
+      "mode": "view",
+      "keywords": [
+        "performance",
+        "metrics",
+        "dashboard",
+        "monitoring",
+        "cache",
+        "system"
+      ]
+    },
+    {
+      "name": "profiling",
+      "title": "Auto Profiling",
+      "subtitle": "MeetingScribe",
+      "description": "Automatic bottleneck detection and optimization suggestions",
+      "mode": "view",
+      "keywords": [
+        "profiling",
+        "bottlenecks",
+        "optimization",
+        "analysis",
+        "suggestions",
+        "insights"
+      ]
+    },
+    {
+      "name": "cache",
+      "title": "File Cache Manager",
+      "subtitle": "MeetingScribe",
+      "description": "Manage file cache and I/O optimization",
+      "mode": "view",
+      "keywords": [
+        "cache",
+        "files",
+        "optimization",
+        "memory",
+        "storage",
+        "performance"
+      ]
+    },
+    {
+      "name": "streaming",
+      "title": "Audio Streaming",
+      "subtitle": "MeetingScribe",
+      "description": "Advanced audio streaming for large files with intelligent optimization",
+      "mode": "view",
+      "keywords": [
+        "streaming",
+        "audio",
+        "large files",
+        "optimization",
+        "chunks",
+        "memory",
+        "performance"
+      ]
+    },
+    {
+      "name": "compression",
+      "title": "Intelligent Compression",
+      "subtitle": "MeetingScribe",
+      "description": "Smart file compression with adaptive algorithms and analysis",
+      "mode": "view",
+      "keywords": [
+        "compression",
+        "files",
+        "algorithms",
+        "optimization",
+        "space",
+        "storage",
+        "analysis"
+      ]
     }
   ],
   "preferences": [
@@ -141,12 +218,10 @@
     }
   ],
   "dependencies": {
-    "@raycast/api": "^1.75.2"
+    "@raycast/api": "^1.78.0"
   },
   "devDependencies": {
     "@raycast/eslint-config": "^1.0.6",
-    "@types/node": "20.8.10",
-    "@types/react": "18.2.27",
     "eslint": "^8.51.0",
     "prettier": "^3.0.3",
     "typescript": "^5.2.2"

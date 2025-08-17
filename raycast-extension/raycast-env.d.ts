@@ -32,6 +32,10 @@ declare namespace Preferences {
   export type Export = ExtensionPreferences & {}
   /** Preferences accessible in the `teams-monitor` command */
   export type TeamsMonitor = ExtensionPreferences & {}
+  /** Preferences accessible in the `performance` command */
+  export type Performance = ExtensionPreferences & {}
+  /** Preferences accessible in the `profiling` command */
+  export type Profiling = ExtensionPreferences & {}
 }
 
 declare namespace Arguments {
@@ -47,5 +51,9 @@ declare namespace Arguments {
   export type Export = {}
   /** Arguments passed to the `teams-monitor` command */
   export type TeamsMonitor = {}
+  /** Arguments passed to the `performance` command */
+  export type Performance = {}
+  /** Arguments passed to the `profiling` command */
+  export type Profiling = {}
 }
 

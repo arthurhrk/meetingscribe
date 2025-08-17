@@ -38,6 +38,49 @@ except ImportError:
     MEMORY_MANAGER_AVAILABLE = False
     logger.debug("Gerenciador de memória não disponível")
 
+# Importar monitor de performance
+try:
+    from src.core.performance_monitor import (
+        get_performance_monitor, 
+        TranscriptionMetrics, 
+        PerformanceTimer,
+        monitor_performance
+    )
+    PERFORMANCE_MONITOR_AVAILABLE = True
+except ImportError:
+    PERFORMANCE_MONITOR_AVAILABLE = False
+    logger.debug("Monitor de performance não disponível")
+
+# Importar auto profiler
+try:
+    from src.core.auto_profiler import get_auto_profiler, auto_profile
+    AUTO_PROFILER_AVAILABLE = True
+except ImportError:
+    AUTO_PROFILER_AVAILABLE = False
+    logger.debug("Auto profiler não disponível")
+
+# Importar cache de arquivos
+try:
+    from src.core.file_optimizers import get_optimized_file_manager
+    FILE_CACHE_AVAILABLE = True
+except ImportError:
+    FILE_CACHE_AVAILABLE = False
+    logger.debug("Cache de arquivos não disponível")
+
+# Importar streaming processor
+try:
+    from src.core.streaming_processor import (
+        create_audio_streamer,
+        StreamConfig,
+        StreamingStrategy,
+        AudioStreamer,
+        streaming_audio
+    )
+    STREAMING_AVAILABLE = True
+except ImportError:
+    STREAMING_AVAILABLE = False
+    logger.debug("Streaming processor não disponível")
+
 
 class WhisperModelSize(Enum):
     """Tamanhos disponíveis do modelo Whisper."""
@@ -252,11 +295,34 @@ class WhisperTranscriber:
                         progress.update(0.3, "Verificando cache de modelos...")
                     
                     try:
+                        model_load_start = time.time()
                         self._model, cache_hit = create_cached_model(
                             self.config.model_size.value,
                             device,
                             compute_type
                         )
+                        model_load_time = time.time() - model_load_start
+                        
+                        # Atualizar métricas de cache
+                        performance_metrics['cache_hits'] = 1 if cache_hit else 0
+                        
+                        # Evento de profiling para carregamento do modelo
+                        if AUTO_PROFILER_AVAILABLE and profiling_session_id:
+                            try:
+                                profiler.add_profiling_event(
+                                    profiling_session_id,
+                                    'model_loading',
+                                    f"Model {self.config.model_size.value} loaded ({'from cache' if cache_hit else 'fresh load'})",
+                                    {
+                                        'load_time': model_load_time,
+                                        'cache_hit': cache_hit,
+                                        'model_size': self.config.model_size.value,
+                                        'device': device,
+                                        'compute_type': compute_type
+                                    }
+                                )
+                            except Exception as e:
+                                logger.debug(f"Erro ao adicionar evento de profiling: {e}")
                         
                         if cache_hit:
                             logger.success(f"Modelo {self.config.model_size.value} obtido do cache!")
@@ -370,6 +436,30 @@ class WhisperTranscriber:
         self._cancel_requested = False
         start_time = time.time()
         
+        # Inicializar métricas de performance
+        performance_metrics = {
+            'cache_hits': 0,
+            'chunks_count': 1,
+            'gpu_used': False,
+            'success': False,
+            'error_message': None
+        }
+        
+        # Inicializar auto profiling
+        profiling_session_id = None
+        if AUTO_PROFILER_AVAILABLE:
+            try:
+                profiler = get_auto_profiler()
+                profiling_context = {
+                    'audio_path': str(audio_path),
+                    'model_size': self.config.model_size.value,
+                    'language': language,
+                    'file_size_mb': audio_path.stat().st_size / (1024 * 1024)
+                }
+                profiling_session_id = profiler.start_profiling_session('transcription', profiling_context)
+            except Exception as e:
+                logger.debug(f"Erro ao iniciar profiling: {e}")
+        
         try:
             # Monitorar memória no início da transcrição
             if MEMORY_MANAGER_AVAILABLE:
@@ -384,6 +474,33 @@ class WhisperTranscriber:
             
             logger.info(f"Iniciando transcrição: {audio_path}")
             
+            # Detectar se está usando GPU
+            performance_metrics['gpu_used'] = device == "cuda" if TORCH_AVAILABLE else False
+            
+            # Pré-carregar metadados do arquivo no cache se disponível
+            if FILE_CACHE_AVAILABLE:
+                try:
+                    file_manager = get_optimized_file_manager()
+                    audio_metadata = file_manager.audio_loader.load_metadata(audio_path)
+                    logger.debug(f"Arquivo de áudio: {audio_metadata.duration:.1f}s, {audio_metadata.format}, {audio_metadata.file_size / 1024 / 1024:.1f}MB")
+                    
+                    # Evento de profiling para metadados
+                    if AUTO_PROFILER_AVAILABLE and profiling_session_id:
+                        profiler.add_profiling_event(
+                            profiling_session_id,
+                            'audio_metadata_loaded',
+                            f"Audio metadata cached: {audio_metadata.duration:.1f}s",
+                            {
+                                'duration': audio_metadata.duration,
+                                'sample_rate': audio_metadata.sample_rate,
+                                'channels': audio_metadata.channels,
+                                'format': audio_metadata.format,
+                                'file_size_mb': audio_metadata.file_size / 1024 / 1024
+                            }
+                        )
+                except Exception as e:
+                    logger.debug(f"Erro ao carregar metadados no cache: {e}")
+            
             # Configurar parâmetros
             transcribe_language = language or self.config.language
             
@@ -392,6 +509,7 @@ class WhisperTranscriber:
             # Detectar se é áudio longo (>5 min) para usar modo qualidade
             audio_size_mb = audio_path.stat().st_size / (1024 * 1024)
             is_large_file = audio_size_mb > 10  # >10MB considerado grande
+            is_very_large_file = audio_size_mb > 100  # >100MB requer streaming
             
             if is_large_file or self.config.quality_mode:
                 # Parâmetros otimizados para QUALIDADE em áudios grandes
@@ -430,12 +548,19 @@ class WhisperTranscriber:
                 }
                 logger.info(f"Modo VELOCIDADE ativado - Arquivo pequeno ({audio_size_mb:.1f}MB)")
             
-            logger.info(f"Iniciando transcrição com faster-whisper - beam_size={optimized_params['beam_size']}, vad=True")
-            
-            transcription_result = self._model.transcribe(
-                str(audio_path),
-                **optimized_params
-            )
+            # Verificar se deve usar streaming para arquivos muito grandes
+            if is_very_large_file and STREAMING_AVAILABLE:
+                logger.info(f"Arquivo muito grande ({audio_size_mb:.1f}MB) - usando streaming")
+                transcription_result = self._transcribe_with_streaming(
+                    audio_path, optimized_params, progress, profiling_session_id
+                )
+            else:
+                logger.info(f"Iniciando transcrição com faster-whisper - beam_size={optimized_params['beam_size']}, vad=True")
+                
+                transcription_result = self._model.transcribe(
+                    str(audio_path),
+                    **optimized_params
+                )
             
             if progress:
                 progress.update(0.2, "Processando áudio...")
@@ -479,6 +604,24 @@ class WhisperTranscriber:
                     segment_id += 1
                     total_duration = max(total_duration, segment.end)
                     
+                    # Evento de profiling a cada 10 segmentos
+                    if AUTO_PROFILER_AVAILABLE and profiling_session_id and processed_segments % 10 == 0:
+                        try:
+                            current_time_processed = time.time() - start_time
+                            profiler.add_profiling_event(
+                                profiling_session_id,
+                                'transcription_progress',
+                                f"Processed {processed_segments} segments",
+                                {
+                                    'segments_processed': processed_segments,
+                                    'processing_time': current_time_processed,
+                                    'audio_length': total_duration,
+                                    'realtime_ratio': current_time_processed / total_duration if total_duration > 0 else 0
+                                }
+                            )
+                        except Exception as e:
+                            logger.debug(f"Erro ao adicionar evento de progresso: {e}")
+                    
                     # Atualizar progresso periodicamente
                     if progress and segment_id % 5 == 0:
                         estimated_progress = min(0.9, 0.3 + (segment_id * 0.6) / max(segment_id + 20, 50))
@@ -498,6 +641,9 @@ class WhisperTranscriber:
             processing_time = time.time() - start_time
             confidence_avg = sum(s.confidence for s in segments) / len(segments) if segments else 0.0
             word_count = sum(len(s.text.split()) for s in segments)
+            
+            # Marcar como sucesso
+            performance_metrics['success'] = True
             
             result = TranscriptionResult(
                 segments=segments,
@@ -522,12 +668,115 @@ class WhisperTranscriber:
                     memory_manager = get_memory_manager()
                     memory_manager.optimize_memory()
             
+            # Enviar métricas para o monitor de performance
+            if PERFORMANCE_MONITOR_AVAILABLE:
+                try:
+                    monitor = get_performance_monitor()
+                    
+                    # Calcular memória usada (estimativa)
+                    memory_used = 0.0
+                    if MEMORY_MANAGER_AVAILABLE:
+                        current_stats = memory_manager.get_current_stats()
+                        memory_used = current_stats.memory_usage_mb
+                    
+                    # Criar métricas de transcrição
+                    trans_metrics = TranscriptionMetrics(
+                        duration=total_duration,
+                        audio_length=total_duration,
+                        model_size=self.config.model_size.value,
+                        chunks_count=performance_metrics['chunks_count'],
+                        processing_time=processing_time,
+                        cache_hits=performance_metrics['cache_hits'],
+                        memory_used=memory_used,
+                        gpu_used=performance_metrics['gpu_used'],
+                        success=performance_metrics['success'],
+                        error_message=performance_metrics['error_message']
+                    )
+                    
+                    monitor.add_transcription_metrics(trans_metrics)
+                    
+                except Exception as e:
+                    logger.debug(f"Erro ao enviar métricas de performance: {e}")
+            
+            # Finalizar profiling session
+            if AUTO_PROFILER_AVAILABLE and profiling_session_id:
+                try:
+                    profiler.add_profiling_event(
+                        profiling_session_id,
+                        'transcription_completed',
+                        f"Transcription completed successfully",
+                        {
+                            'total_segments': len(segments),
+                            'total_duration': processing_time,
+                            'audio_length': total_duration,
+                            'word_count': word_count,
+                            'confidence_avg': confidence_avg,
+                            'success': True
+                        }
+                    )
+                    
+                    # Finalizar sessão de profiling
+                    profiling_report = profiler.end_profiling_session(profiling_session_id)
+                    logger.debug(f"Profiling completed - {len(profiling_report.bottlenecks)} bottlenecks detected")
+                    
+                except Exception as e:
+                    logger.debug(f"Erro ao finalizar profiling: {e}")
+            
             logger.success(f"Transcrição concluída em {processing_time:.2f}s - {len(segments)} segmentos")
             return result
         
         except Exception as e:
             error_msg = f"Erro na transcrição: {str(e)}"
             logger.error(error_msg)
+            
+            # Enviar métricas de erro
+            if PERFORMANCE_MONITOR_AVAILABLE:
+                try:
+                    monitor = get_performance_monitor()
+                    processing_time = time.time() - start_time
+                    
+                    performance_metrics['success'] = False
+                    performance_metrics['error_message'] = str(e)
+                    
+                    trans_metrics = TranscriptionMetrics(
+                        duration=0.0,
+                        audio_length=0.0,
+                        model_size=self.config.model_size.value,
+                        chunks_count=performance_metrics['chunks_count'],
+                        processing_time=processing_time,
+                        cache_hits=performance_metrics['cache_hits'],
+                        memory_used=0.0,
+                        gpu_used=performance_metrics['gpu_used'],
+                        success=performance_metrics['success'],
+                        error_message=performance_metrics['error_message']
+                    )
+                    
+                    monitor.add_transcription_metrics(trans_metrics)
+                    
+                except Exception as monitor_error:
+                    logger.debug(f"Erro ao enviar métricas de erro: {monitor_error}")
+            
+            # Finalizar profiling com erro
+            if AUTO_PROFILER_AVAILABLE and profiling_session_id:
+                try:
+                    profiler.add_profiling_event(
+                        profiling_session_id,
+                        'transcription_error',
+                        f"Transcription failed: {str(e)}",
+                        {
+                            'error_type': type(e).__name__,
+                            'error_message': str(e),
+                            'processing_time': time.time() - start_time,
+                            'success': False
+                        }
+                    )
+                    
+                    # Finalizar sessão de profiling
+                    profiling_report = profiler.end_profiling_session(profiling_session_id)
+                    logger.debug(f"Profiling completed with error - {len(profiling_report.bottlenecks)} bottlenecks detected")
+                    
+                except Exception as profiling_error:
+                    logger.debug(f"Erro ao finalizar profiling com erro: {profiling_error}")
             
             if progress:
                 progress.update(0.0, f"Erro: {str(e)}")
@@ -538,6 +787,197 @@ class WhisperTranscriber:
         """Cancela a transcrição em andamento."""
         self._cancel_requested = True
         logger.info("Cancelamento de transcrição solicitado")
+    
+    def _transcribe_with_streaming(
+        self, 
+        audio_path: Path, 
+        optimized_params: Dict[str, Any],
+        progress: Optional[TranscriptionProgress] = None,
+        profiling_session_id: Optional[str] = None
+    ) -> Generator:
+        """
+        Transcreve arquivo grande usando streaming otimizado.
+        
+        Args:
+            audio_path: Caminho do arquivo de áudio
+            optimized_params: Parâmetros otimizados para transcrição
+            progress: Callback de progresso
+            profiling_session_id: ID da sessão de profiling
+            
+        Yields:
+            Segmentos de transcrição processados
+        """
+        if not STREAMING_AVAILABLE:
+            logger.warning("Streaming não disponível, usando método tradicional")
+            return self._model.transcribe(str(audio_path), **optimized_params)
+        
+        # Configurar streaming baseado no tamanho do arquivo
+        file_size_mb = audio_path.stat().st_size / (1024 * 1024)
+        
+        # Configuração inteligente do streaming
+        stream_config = StreamConfig()
+        
+        if file_size_mb > 1000:  # > 1GB
+            stream_config.strategy = StreamingStrategy.MEMORY_AWARE
+            stream_config.chunk_size_seconds = 60.0
+            stream_config.buffer_size_mb = 512
+            stream_config.quality_mode = True
+        elif file_size_mb > 500:  # > 500MB
+            stream_config.strategy = StreamingStrategy.INTELLIGENT
+            stream_config.chunk_size_seconds = 45.0
+            stream_config.buffer_size_mb = 256
+        else:  # 100-500MB
+            stream_config.strategy = StreamingStrategy.ADAPTIVE_CHUNK
+            stream_config.chunk_size_seconds = 30.0
+            stream_config.buffer_size_mb = 128
+        
+        stream_config.enable_cache = FILE_CACHE_AVAILABLE
+        
+        logger.info(f"Streaming config: {stream_config.strategy.value}, chunk={stream_config.chunk_size_seconds}s")
+        
+        # Evento de profiling para início do streaming
+        if AUTO_PROFILER_AVAILABLE and profiling_session_id:
+            try:
+                profiler = get_auto_profiler()
+                profiler.add_profiling_event(
+                    profiling_session_id,
+                    'streaming_started',
+                    f"Started streaming transcription: {stream_config.strategy.value}",
+                    {
+                        'file_size_mb': file_size_mb,
+                        'strategy': stream_config.strategy.value,
+                        'chunk_size': stream_config.chunk_size_seconds,
+                        'buffer_size_mb': stream_config.buffer_size_mb
+                    }
+                )
+            except Exception as e:
+                logger.debug(f"Erro ao registrar evento de profiling: {e}")
+        
+        try:
+            # Criar streamer
+            streamer = create_audio_streamer(stream_config)
+            
+            total_segments = []
+            chunk_count = 0
+            total_chunks_estimated = max(1, int(file_size_mb / 10))  # Estimativa baseada no tamanho
+            
+            def process_chunk(chunk):
+                """Processa chunk individual com Whisper"""
+                nonlocal chunk_count
+                chunk_count += 1
+                
+                if self._cancel_requested:
+                    return None
+                
+                # Atualizar progresso
+                if progress:
+                    progress_value = min(0.9, 0.2 + (chunk_count / total_chunks_estimated) * 0.7)
+                    progress.update(
+                        progress_value, 
+                        f"Transcrevendo chunk {chunk_count}/{total_chunks_estimated} (streaming)..."
+                    )
+                
+                # Criar arquivo temporário para o chunk
+                import tempfile
+                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
+                    temp_path = Path(temp_file.name)
+                
+                try:
+                    # Salvar chunk como arquivo temporário
+                    import soundfile as sf
+                    sf.write(str(temp_path), chunk.data, chunk.sample_rate)
+                    
+                    # Transcrever chunk individual
+                    chunk_result = self._model.transcribe(str(temp_path), **optimized_params)
+                    
+                    # Ajustar timestamps baseado no tempo do chunk
+                    chunk_segments = []
+                    for segment in chunk_result[0]:  # [0] para segmentos
+                        adjusted_segment = TranscriptionSegment(
+                            id=len(total_segments) + len(chunk_segments),
+                            text=segment.text.strip(),
+                            start=segment.start + chunk.start_time,
+                            end=segment.end + chunk.start_time,
+                            confidence=getattr(segment, 'avg_logprob', 0.0) if hasattr(segment, 'avg_logprob') else 0.0
+                        )
+                        chunk_segments.append(adjusted_segment)
+                    
+                    logger.debug(f"Chunk {chunk_count}: {len(chunk_segments)} segmentos, {chunk.start_time:.1f}s-{chunk.end_time:.1f}s")
+                    return chunk_segments
+                    
+                except Exception as e:
+                    logger.error(f"Erro ao processar chunk {chunk_count}: {e}")
+                    return []
+                    
+                finally:
+                    # Limpar arquivo temporário
+                    if temp_path.exists():
+                        temp_path.unlink()
+            
+            # Processar chunks com streaming
+            for chunk in streamer.stream_file(audio_path, process_chunk):
+                if self._cancel_requested:
+                    break
+                
+                # Os segmentos já foram processados pelo process_chunk
+                if hasattr(chunk, 'processed_segments'):
+                    total_segments.extend(chunk.processed_segments)
+            
+            # Obter estatísticas de streaming
+            streaming_stats = streamer.get_stats()
+            
+            # Evento de profiling para fim do streaming
+            if AUTO_PROFILER_AVAILABLE and profiling_session_id:
+                try:
+                    profiler.add_profiling_event(
+                        profiling_session_id,
+                        'streaming_completed',
+                        f"Streaming transcription completed: {chunk_count} chunks",
+                        {
+                            'chunks_processed': chunk_count,
+                            'total_segments': len(total_segments),
+                            'cache_hit_rate': streaming_stats.get('cache_hit_rate', 0),
+                            'processing_time': streaming_stats.get('processing_time', 0),
+                            'io_time': streaming_stats.get('io_time', 0)
+                        }
+                    )
+                except Exception as e:
+                    logger.debug(f"Erro ao registrar fim do streaming: {e}")
+            
+            logger.info(f"Streaming concluído: {chunk_count} chunks, {len(total_segments)} segmentos")
+            
+            # Simular resultado do faster-whisper
+            class StreamingResult:
+                def __init__(self, segments, language_info):
+                    self._segments = segments
+                    self.language = language_info.get('language', 'unknown')
+                    self.language_probability = language_info.get('language_probability', 0.0)
+                
+                def __iter__(self):
+                    return iter(self._segments)
+                
+                def __getitem__(self, index):
+                    if index == 0:
+                        return self._segments
+                    elif index == 1:
+                        return {
+                            'language': self.language,
+                            'language_probability': self.language_probability
+                        }
+                    else:
+                        raise IndexError("StreamingResult index out of range")
+            
+            # Criar resultado compatível
+            return StreamingResult(
+                total_segments,
+                {'language': optimized_params.get('language', 'unknown'), 'language_probability': 0.95}
+            )
+            
+        except Exception as e:
+            logger.error(f"Erro durante streaming: {e}")
+            # Fallback para método tradicional
+            logger.info("Fallback para transcrição tradicional")
+            return self._model.transcribe(str(audio_path), **optimized_params)
     
     def cleanup(self) -> None:
         """Limpa recursos do modelo (mas mantém no cache global)."""

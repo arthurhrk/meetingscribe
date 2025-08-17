@@ -1,5 +1,11 @@
 # Análise e Especificação de Completação - src/core/
 
+## Abordagem de Arquitetura (Ports & Adapters)
+
+- Transporte-agnóstico: o core não assume HTTP nem Raycast como obrigatórios.
+- Contratos e serviços no centro; adapters (CLI, STDIO, Raycast, HTTP opcional) orbitam o core.
+- A fonte de verdade para integração é a Interface de Runtime em JSON (ver `docs/specs/runtime-interface.md`).
+
 ## Análise Estrutural Atual
 
 ### **Arquivos Existentes Mapeados**
@@ -42,17 +48,20 @@ src/core/
 └── settings_manager.py      ✅ Configuration management avançado
 ```
 
-#### **FALTANDO PARA COMPLETAR** ❌
+#### **Estado Atualizado**
 ```
 src/core/
-├── domain_services.py      ❌ Business logic layer
-├── validation_engine.py    ❌ Data validation rules
-├── event_system.py         ❌ Event-driven patterns  
-├── cache_manager.py        ❌ Intelligent caching
-├── performance_monitor.py  ❌ Performance tracking
-├── error_recovery.py       ❌ Error recovery mechanisms
-├── plugin_system.py        ❌ Extensibility framework
-└── service_registry.py     ❌ Service locator pattern
+├── domain_services.py      ✅ Camada de regras/orquestração (EXISTENTE)
+├── performance_monitor.py  ✅ Monitoramento de performance (EXISTENTE)
+├── model_cache.py          ✅ Cache de modelos (EXISTENTE)
+├── audio_chunk_processor.py✅ Chunking de áudio (EXISTENTE)
+├── memory_manager.py       ✅ Gestão de memória (EXISTENTE)
+├── async_processor.py      ✅ Processamento assíncrono (EXISTENTE)
+├── async_integration.py    ✅ Integração assíncrona (EXISTENTE)
+├── validation_engine.py    ❌ (Opcional/Futuro)
+├── event_system.py         ❌ (Opcional/Futuro)
+├── plugin_system.py        ❌ (Opcional/Futuro)
+└── service_registry.py     ❌ (Opcional/Futuro)
 ```
 
 #### **MÓDULOS PARA EVOLUÇÃO** 🔄
@@ -156,15 +165,16 @@ graph TD
 - ✅ **Type hints**: Consistentes com resto do projeto
 - ✅ **Error handling**: Segue patterns de graceful degradation
 
-## Especificação de Core Functionality Faltante
+## Especificação de Core Functionality (Complementos)
 
-### **1. Domain Services Layer** ❌ **CRIAR**
+### **1. Domain Services Layer** ✅ **Consolidar/Documentar**
 
-#### **Arquivo: `src/core/domain_services.py`**
+#### **Arquivo: `src/core/domain_services.py`** (já existente)
 ```python
 """
 Domain Services para regras de negócio complexas.
-Compatível com Pydantic models em src/models/domain.py
+Compatível com modelos do domínio (src/models/domain.py).
+Interfaceada via Facade de Serviços consumida por adapters.
 """
 
 from typing import List, Optional, Dict, Any
@@ -230,13 +240,14 @@ class WorkflowOrchestrationService:
         """Workflow completo: recording → transcription → storage."""
 ```
 
-### **2. Validation Engine** ❌ **CRIAR**
+### **2. Validation Engine** ❌ **Criar (Opcional)**
 
 #### **Arquivo: `src/core/validation_engine.py`**
 ```python
 """
 Engine de validação para business rules e data integrity.
-Integra com Pydantic models para validação avançada.
+Integra com modelos do domínio para validação avançada.
+Opcional; o core funciona sem este módulo.
 """
 
 from typing import List, Dict, Any, Callable, Type

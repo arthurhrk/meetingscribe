@@ -126,6 +126,73 @@ from .async_integration import (
     list_active_transcriptions
 )
 
+from .performance_monitor import (
+    PerformanceMonitor,
+    PerformanceMetric,
+    TranscriptionMetrics,
+    SystemMetrics,
+    PerformanceTimer,
+    get_performance_monitor,
+    init_performance_monitoring,
+    monitor_performance
+)
+
+from .raycast_metrics_cli import (
+    RaycastMetricsCLI
+)
+
+from .auto_profiler import (
+    AutoProfiler,
+    BottleneckDetection,
+    ProfilingReport,
+    SystemSnapshot,
+    get_auto_profiler,
+    auto_profile
+)
+
+from .profiler_cli import (
+    ProfilerCLI
+)
+
+from .file_cache import (
+    FileCache,
+    FileCacheConfig,
+    CacheStrategy,
+    CompressionLevel,
+    CacheEntry,
+    get_file_cache,
+    shutdown_file_cache,
+    cached_file,
+    file_cached
+)
+
+from .file_optimizers import (
+    OptimizedAudioLoader,
+    OptimizedFileManager,
+    AudioMetadata,
+    get_optimized_file_manager
+)
+
+from .cache_cli import (
+    CacheCLI
+)
+
+from .streaming_processor import (
+    AudioStreamer,
+    StreamConfig,
+    StreamingStrategy,
+    BufferStrategy,
+    AudioChunk,
+    StreamingStats,
+    create_audio_streamer,
+    stream_large_audio_file,
+    streaming_audio
+)
+
+from .streaming_cli import (
+    StreamingCLI
+)
+
 __all__ = [
     # Hardware detection
     "HardwareDetector",
@@ -198,6 +265,41 @@ __all__ = [
     "AsyncTranscriptionManager",
     "AsyncTranscriptionRequest",
     
+    # Performance Monitoring
+    "PerformanceMonitor",
+    "PerformanceMetric",
+    "TranscriptionMetrics",
+    "SystemMetrics",
+    "PerformanceTimer",
+    "RaycastMetricsCLI",
+    
+    # Auto Profiling
+    "AutoProfiler",
+    "BottleneckDetection",
+    "ProfilingReport",
+    "SystemSnapshot",
+    "ProfilerCLI",
+    
+    # File Cache
+    "FileCache",
+    "FileCacheConfig",
+    "CacheStrategy",
+    "CompressionLevel",
+    "CacheEntry",
+    "OptimizedAudioLoader",
+    "OptimizedFileManager",
+    "AudioMetadata",
+    "CacheCLI",
+    
+    # Streaming
+    "AudioStreamer",
+    "StreamConfig",
+    "StreamingStrategy",
+    "BufferStrategy",
+    "AudioChunk",
+    "StreamingStats",
+    "StreamingCLI",
+    
     # Factory functions
     "create_settings_manager",
     "get_system_info",
@@ -224,5 +326,18 @@ __all__ = [
     "wait_for_transcription",
     "get_async_stats",
     "cancel_transcription",
-    "list_active_transcriptions"
+    "list_active_transcriptions",
+    "get_performance_monitor",
+    "init_performance_monitoring",
+    "monitor_performance",
+    "get_auto_profiler",
+    "auto_profile",
+    "get_file_cache",
+    "shutdown_file_cache",
+    "cached_file",
+    "file_cached",
+    "get_optimized_file_manager",
+    "create_audio_streamer",
+    "stream_large_audio_file",
+    "streaming_audio"
 ]

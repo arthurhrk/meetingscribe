@@ -1,5 +1,17 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "display": "Raycast",
-  "extends": "@raycast/eslint-config/tsconfig.json"
+  "extends": "@raycast/api/tsconfig.json",
+  "compilerOptions": {
+    "lib": [
+      "es2023",
+      "dom",
+      "dom.iterable"
+    ],
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx"
+  ]
 }

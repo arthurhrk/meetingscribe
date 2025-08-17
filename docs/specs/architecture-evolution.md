@@ -67,6 +67,24 @@ def setup_logging():
 - ✅ **Estender**: Novas exceções seguindo mesmo pattern
 - ✅ **Preservar**: Try-catch abrangente em pontos críticos
 
+### 2. **Transporte-Agnóstico e Adapters**
+
+- Princípio: o core não depende de transporte específico (sem lock-in em HTTP nem Raycast).
+- Adapters suportados:
+  - CLI/Batch (atual) com `--json` como contrato estável.
+  - STDIO Daemon (`--serve-stdio`) para reduzir latência com modelos carregados.
+  - Raycast Extension (primária) consumindo CLI/STDIO.
+  - HTTP (FastAPI) como adapter opcional, separado do core.
+- Fonte de verdade: `docs/specs/runtime-interface.md` define comandos, respostas e eventos.
+
+```text
+Core Domain/Services  <-- contratos JSON -->  Adapters (CLI, STDIO, Raycast, HTTP opcional)
+```
+
+#### **STDIO Runner**
+- Processo persistente que aceita requests JSON via stdin e emite respostas/eventos no stdout.
+- Permite progresso em tempo real (JSONL) sem um servidor HTTP.
+
 ## Novos Módulos Especificados
 
 ### 1. **AudioCaptureEngine (src/audio/)**

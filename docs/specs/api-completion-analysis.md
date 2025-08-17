@@ -1,27 +1,24 @@
-# Análise e Especificação de Completação - src/api/
+# Interface de Adapters (HTTP Opcional) - src/api/
 
-## Auditoria do Módulo API
+## Auditoria do Módulo API (HTTP Adapter Opcional)
 
-### **Estado Atual Descoberto** ❌
-- **Diretório**: `src/api/` existe mas está **VAZIO**
-- **Status**: Nenhuma implementação FastAPI encontrada
-- **Estrutura**: Apenas placeholder de diretório
-- **Endpoints**: 0 endpoints implementados
-- **Middleware**: Não implementado
-- **Error handling**: Não implementado
+### **Estado Atual Descoberto**
+- **Diretório**: `src/api/` é um placeholder (sem implementação por design)
+- **Papel**: Adapter HTTP é opcional; o projeto prioriza Raycast via CLI/STDIO
+- **Fonte de Verdade**: contratos definidos em `docs/specs/runtime-interface.md`
 
 ### **Conclusão da Auditoria**
-O módulo API está em estado **inicial/placeholder** e requer implementação completa from scratch. Esta é uma oportunidade para criar uma API moderna e bem integrada com o sistema existente.
+O módulo HTTP é um adapter opcional. Pode ser implementado quando houver necessidade de exposição via REST/WebSocket, seguindo estritamente os contratos da Interface de Runtime. Não é requisito para uso via Raycast/CLI.
 
-## Mapeamento de Endpoints Necessários vs Existentes
+## Mapeamento de Endpoints (Exemplo de Adaptação HTTP)
 
-### **Endpoints Atuais** ❌
+### **Status Atual**
 ```
-src/api/ 
-└── (vazio - nenhum endpoint implementado)
+src/api/
+└── (placeholder)
 ```
 
-### **Endpoints Necessários Especificados** ✅
+### **Endpoints Exemplificativos** ✅ (mapeiam métodos da Runtime Interface)
 
 #### **1. Audio Endpoints**
 ```
@@ -130,9 +127,9 @@ from src.interfaces import (
 )
 ```
 
-## Especificação de API Completion
+## Especificação de HTTP Adapter (Opcional)
 
-### **Estrutura FastAPI Proposta** ✅
+### **Estrutura FastAPI Proposta** ✅ (opcional)
 
 ```
 src/api/
@@ -166,7 +163,7 @@ src/api/
     └── background_tasks.py  # Async task management
 ```
 
-### **FastAPI Application Factory** ✅
+### **FastAPI Application Factory** ✅ (opcional)
 
 #### **Arquivo: `src/api/__init__.py`**
 ```python

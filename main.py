@@ -1993,6 +1993,139 @@ def handle_cli_commands(args) -> int:
             print(json.dumps({"status": "exported", "path": str(export_path)}))
             return 0
             
+        elif args.performance:
+            # Performance monitoring commands
+            try:
+                from src.core.raycast_metrics_cli import RaycastMetricsCLI
+                cli = RaycastMetricsCLI()
+                
+                if args.performance == "status":
+                    result = cli.get_system_status()
+                elif args.performance == "dashboard":
+                    result = cli.get_dashboard_data()
+                elif args.performance == "metrics":
+                    result = cli.get_transcription_metrics()
+                elif args.performance == "cache":
+                    result = cli.get_cache_status()
+                elif args.performance == "trends":
+                    hours = getattr(args, 'hours', 24)
+                    result = cli.get_performance_trends(hours)
+                elif args.performance == "export":
+                    result = cli.export_report(args.performance_format)
+                else:
+                    result = {"error": f"Unknown performance command: {args.performance}"}
+                
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+                return 0
+                
+            except ImportError:
+                print(json.dumps({"error": "Performance monitoring not available"}))
+                return 1
+            except Exception as e:
+                print(json.dumps({"error": f"Performance command failed: {str(e)}"}))
+                return 1
+                
+        elif args.profiling:
+            # Profiling commands
+            try:
+                from src.core.profiler_cli import ProfilerCLI
+                cli = ProfilerCLI()
+                
+                if args.profiling == "summary":
+                    result = cli.get_bottleneck_summary()
+                elif args.profiling == "reports":
+                    result = cli.get_detailed_reports(args.profiling_limit)
+                elif args.profiling == "insights":
+                    result = cli.get_performance_insights()
+                elif args.profiling == "suggestions":
+                    result = cli.get_optimization_suggestions()
+                elif args.profiling == "export":
+                    result = cli.export_profiling_report(args.performance_format)
+                else:
+                    result = {"error": f"Unknown profiling command: {args.profiling}"}
+                
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+                return 0
+                
+            except ImportError:
+                print(json.dumps({"error": "Auto profiling not available"}))
+                return 1
+            except Exception as e:
+                print(json.dumps({"error": f"Profiling command failed: {str(e)}"}))
+                return 1
+                
+        elif args.cache:
+            # Cache management commands
+            try:
+                from src.core.cache_cli import CacheCLI
+                cli = CacheCLI()
+                
+                if args.cache == "status":
+                    result = cli.get_cache_status()
+                elif args.cache == "insights":
+                    result = cli.get_cache_insights()
+                elif args.cache == "optimize":
+                    result = cli.optimize_cache()
+                elif args.cache == "clear":
+                    result = cli.clear_cache()
+                elif args.cache == "preload":
+                    if not args.cache_directory:
+                        result = {"error": "Directory required for preload command"}
+                    else:
+                        result = cli.preload_directory(args.cache_directory)
+                elif args.cache == "config":
+                    result = cli.get_cache_config()
+                else:
+                    result = {"error": f"Unknown cache command: {args.cache}"}
+                
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+                return 0
+                
+            except ImportError:
+                print(json.dumps({"error": "File cache not available"}))
+                return 1
+            except Exception as e:
+                print(json.dumps({"error": f"Cache command failed: {str(e)}"}))
+                return 1
+        
+        elif args.streaming:
+            # Streaming management commands
+            try:
+                from src.core.streaming_cli import StreamingCLI
+                cli = StreamingCLI()
+                
+                if args.streaming == "status":
+                    result = cli.get_streaming_status()
+                elif args.streaming == "analyze":
+                    if not args.streaming_file:
+                        result = {"error": "File required for analyze command"}
+                    else:
+                        result = cli.analyze_file(args.streaming_file)
+                elif args.streaming == "test":
+                    if not args.streaming_file:
+                        result = {"error": "File required for test command"}
+                    else:
+                        result = cli.stream_test(args.streaming_file, args.streaming_config)
+                elif args.streaming == "insights":
+                    result = cli.get_streaming_insights()
+                elif args.streaming == "benchmark":
+                    if not args.streaming_file:
+                        result = {"error": "File required for benchmark command"}
+                    else:
+                        result = cli.benchmark_strategies(args.streaming_file)
+                else:
+                    result = {"error": f"Unknown streaming command: {args.streaming}"}
+                
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+                return 0
+                
+            except ImportError:
+                print(json.dumps({"error": "Streaming processor not available"}))
+                return 1
+            except Exception as e:
+                print(json.dumps({"error": f"Streaming command failed: {str(e)}"}))
+                return 1
+            
     except Exception as e:
         print(json.dumps({"error": str(e)}))
         return 1
@@ -2027,11 +2160,20 @@ def main() -> int:
     parser.add_argument('--format', help='Formato para exportação')
     parser.add_argument('--speakers', action='store_true', help='Ativar detecção de speakers')
     parser.add_argument('--duration', type=int, help='Duração da gravação em segundos (para CLI)', default=None)
+    parser.add_argument('--performance', help='Comando de performance (status, dashboard, metrics, export)')
+    parser.add_argument('--performance-format', default='json', help='Formato de saída para performance')
+    parser.add_argument('--profiling', help='Comando de profiling (summary, reports, insights, suggestions, export)')
+    parser.add_argument('--profiling-limit', type=int, default=5, help='Limite de resultados para profiling')
+    parser.add_argument('--cache', help='Comando de cache (status, insights, optimize, clear, preload, config)')
+    parser.add_argument('--cache-directory', help='Diretório para comando preload do cache')
+    parser.add_argument('--streaming', help='Comando de streaming (status, analyze, test, insights, benchmark)')
+    parser.add_argument('--streaming-file', help='Arquivo para comandos de streaming')
+    parser.add_argument('--streaming-config', help='Configuração JSON para streaming')
     
     args = parser.parse_args()
     
     # If CLI arguments provided, handle them instead of interactive mode
-    if any([args.list_transcriptions, args.record, args.transcribe, args.export]):
+    if any([args.list_transcriptions, args.record, args.transcribe, args.export, args.performance, args.profiling, args.cache, args.streaming]):
         return handle_cli_commands(args)
     
     exit_code = 0
