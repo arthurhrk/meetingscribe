@@ -8,11 +8,11 @@
 /* eslint-disable @typescript-eslint/ban-types */
 
 type ExtensionPreferences = {
-  /** Python Path - Caminho para o executável Python do MeetingScribe */
+  /** Python Path - Path to the MeetingScribe Python executable */
   "pythonPath": string,
-  /** Project Path - Caminho para o diretório do MeetingScribe */
+  /** Project Path - Path to the MeetingScribe project directory */
   "projectPath": string,
-  /** Default Whisper Model - Modelo Whisper padrão para transcrições */
+  /** Default Whisper Model - Default Whisper model for transcriptions */
   "defaultModel": "tiny" | "base" | "small" | "medium" | "large-v3"
 }
 

@@ -19,7 +19,7 @@ import asyncio
 
 # Compatibilidade com sistema existente
 from config import Settings
-from loguru import Logger
+from loguru._logger import Logger
 from rich.console import Console
 from rich.progress import Progress, TaskID
 

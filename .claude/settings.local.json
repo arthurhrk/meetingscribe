@@ -9,7 +9,9 @@
       "Bash(node:*)",
       "Bash(powershell:*)",
       "Bash(npx ray:*)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(ffprobe:*)",
+      "Bash(rm:*)"
     ],
     "deny": []
   }

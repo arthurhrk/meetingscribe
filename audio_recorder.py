@@ -284,6 +284,7 @@ class AudioRecorder:
                 if (self._config.max_duration and 
                     duration >= self._config.max_duration):
                     logger.info(f"Duração máxima atingida: {self._config.max_duration}s")
+                    self._recording = False
                     break
                 
                 # Ler dados do stream
@@ -295,7 +296,7 @@ class AudioRecorder:
                     # Tentar ler com timeout para evitar travamento
                     try:
                         data = self._stream.read(self._config.chunk_size, exception_on_overflow=False)
-                        logger.debug(f"Dados lidos do stream: {len(data)} bytes")
+                        # logger.debug(f"Dados lidos do stream: {len(data)} bytes")
                     except OSError as e:
                         logger.error(f"Erro OSError na leitura do stream: {e}")
                         if "unanticipated host error" in str(e) or "device unavailable" in str(e):
@@ -306,7 +307,7 @@ class AudioRecorder:
                     if len(data) > 0:
                         self._frames.append(data)
                         self._stats.samples_recorded += self._config.chunk_size
-                        logger.debug(f"Total de frames gravados: {len(self._frames)}")
+                        # logger.debug(f"Total de frames gravados: {len(self._frames)}")
                     else:
                         logger.warning("Nenhum dado capturado do stream de áudio")
                     
@@ -318,7 +319,7 @@ class AudioRecorder:
                             logger.warning(f"Erro no callback de progresso: {e}")
                     
                     # Pequena pausa para evitar 100% CPU
-                    time.sleep(0.001)
+                    time.sleep(0.05)  # Mais tempo de pausa para reduzir carga
                     
                 except Exception as e:
                     logger.warning(f"Erro ao ler dados de áudio: {e}")

@@ -33,7 +33,7 @@ try:
         create_transcriber, WhisperModelSize, TranscriptionProgress,
         export_transcription, ExportFormat, TranscriptionError,
         create_intelligent_transcriber, IntelligentProgress, transcribe_with_speakers,
-        SpeakerDetectionError, ModelNotAvailableError
+        SpeakerDetectionError, ModelNotAvailableError, save_transcription_txt
     )
     from src.core import (
         create_settings_manager, get_system_info, PerformanceLevel,
@@ -1742,32 +1742,53 @@ def handle_cli_commands(args) -> int:
             return 0
             
         elif args.record:
-            device_manager = DeviceManager()
-            
-            if args.device:
-                # Tratar opções especiais "Same as System"
-                if args.device == "system_input":
-                    device = device_manager.get_system_default_input()
-                elif args.device == "system_output":
-                    device = device_manager.get_system_default_output()
+            # Use a robust fallback approach for recording
+            try:
+                device_manager = DeviceManager()
+                device = None
+                
+                # Try to get specified device or find a working one
+                if args.device:
+                    if args.device == "system_input":
+                        device = device_manager.get_system_default_input()
+                    elif args.device == "system_output":
+                        device = device_manager.get_system_default_output()
+                    else:
+                        try:
+                            device_id = int(args.device)
+                            # Skip known problematic device 10 for now
+                            if device_id == 10:
+                                print(json.dumps({"error": "Device 10 currently unavailable. Try device 8 (WASAPI) or 3 (MME)"}), file=sys.stderr)
+                                return 1
+                            device = device_manager.get_device_by_index(device_id)
+                        except ValueError:
+                            print(json.dumps({"error": "Invalid device ID"}), file=sys.stderr)
+                            return 1
                 else:
-                    # Dispositivo específico por índice
-                    try:
-                        device = device_manager.get_device_by_index(int(args.device))
-                    except ValueError:
-                        print(json.dumps({"error": "Invalid device ID"}))
-                        return 1
-            else:
-                # Usar dispositivo padrão
-                device = device_manager.get_default_speakers()
-            
-            if not device:
-                print(json.dumps({"error": "No suitable audio device found"}))
-                return 1
-            
-            # Verificar se o dispositivo tem canais de entrada adequados
-            if device.max_input_channels == 0:
-                print(json.dumps({"error": f"Invalid audio channels: device '{device.name}' has 0 input channels"}))
+                    # Auto-select best available device
+                    devices = device_manager.list_all_devices()
+                    for d in devices:
+                        if d.is_loopback and d.max_input_channels > 0 and d.index != 10:
+                            device = d
+                            break
+                    
+                    if not device:
+                        # Fallback to any working device
+                        for d in devices:
+                            if d.max_input_channels > 0:
+                                device = d
+                                break
+                
+                if not device:
+                    print(json.dumps({"error": "No suitable audio device found"}), file=sys.stderr)
+                    return 1
+                    
+                if device.max_input_channels == 0:
+                    print(json.dumps({"error": f"Device '{device.name}' has no input channels"}), file=sys.stderr)
+                    return 1
+                    
+            except Exception as e:
+                print(json.dumps({"error": f"Device detection failed: {str(e)}"}), file=sys.stderr)
                 return 1
                 
             from audio_recorder import AudioRecorder
@@ -1787,77 +1808,173 @@ def handle_cli_commands(args) -> int:
             config = RecordingConfig(
                 device=device,
                 sample_rate=int(device.default_sample_rate),  # Use device's native sample rate
-                channels=device.max_input_channels,  # Use device's native channels
-                output_dir=settings.recordings_dir
+                channels=min(device.max_input_channels, 2) if device.max_input_channels > 0 else 1,  # Limit to max 2 channels
+                output_dir=settings.recordings_dir,
+                max_duration=args.duration if hasattr(args, 'duration') and args.duration else None
             )
             
             recorder = AudioRecorder(config=config)
             
             # Start recording
-            success = recorder.start_recording(str(recording_path))
-            if not success:
-                print(json.dumps({"error": "Failed to start recording"}))
+            try:
+                filepath = recorder.start_recording(filename)
+                print(json.dumps({
+                    "status": "Recording started", 
+                    "device": device.name,
+                    "file": filepath,
+                    "message": "Recording will continue until process is stopped (Ctrl+C)"
+                }))
+            except Exception as e:
+                print(json.dumps({"error": f"Failed to start recording: {str(e)}"}), file=sys.stderr)
                 return 1
             
-            print(json.dumps({
-                "status": "Recording started", 
-                "device": device.name,
-                "file": str(recording_path),
-                "message": "Recording will continue until process is stopped (Ctrl+C)"
-            }))
             
-            # Record for specified duration or until interrupted
+            # Record with timeout safety
             try:
-                duration = args.duration if (hasattr(args, 'duration') and args.duration) else None
-                if duration:
-                    print(f"Recording for {duration} seconds... Press Ctrl+C to stop early", file=sys.stderr)
-                    for i in range(duration):
-                        time.sleep(1)
-                        if not recorder.is_recording:
-                            break
-                else:
-                    print("Recording continuously... Press Ctrl+C to stop", file=sys.stderr)
-                    while recorder.is_recording:
-                        time.sleep(1)
+                duration = args.duration if hasattr(args, 'duration') and args.duration else 30  # Default 30s max
+                print(f"Recording for up to {duration} seconds...", file=sys.stderr)
+                
+                # Use timeout to prevent hanging
+                import threading
+                stop_event = threading.Event()
+                
+                def timeout_handler():
+                    time.sleep(duration + 2)  # Safety buffer
+                    if not stop_event.is_set():
+                        print("Timeout reached, forcing stop", file=sys.stderr)
+                        stop_event.set()
+                
+                timeout_thread = threading.Thread(target=timeout_handler, daemon=True)
+                timeout_thread.start()
+                
+                # Monitor recording with safety checks
+                start_time = time.time()
+                while recorder.is_recording() and not stop_event.is_set():
+                    elapsed = time.time() - start_time
+                    if elapsed >= duration:
+                        print("Duration limit reached", file=sys.stderr)
+                        break
+                    time.sleep(0.1)
+                    
+                stop_event.set()  # Signal timeout thread to exit
                         
             except KeyboardInterrupt:
-                print("\nStopping recording early...", file=sys.stderr)
+                print("\nUser interrupted recording", file=sys.stderr)
             finally:
-                final_path = recorder.stop_recording()
-                if final_path:
-                    file_size = os.path.getsize(final_path) if os.path.exists(final_path) else 0
-                    print(json.dumps({
-                        "status": "Recording stopped",
-                        "file": final_path,
-                        "size_bytes": file_size
-                    }))
-                else:
-                    print(json.dumps({"error": "Failed to stop recording properly"}))
-                    
-                recorder.close()
+                try:
+                    # Force stop with timeout
+                    if recorder.is_recording():
+                        print("Stopping recording...", file=sys.stderr)
+                        stats = recorder.stop_recording()
+                        
+                        if stats and stats.filename:
+                            file_path = Path(stats.filename)
+                            file_size = file_path.stat().st_size if file_path.exists() else 0
+                            print(json.dumps({
+                                "status": "Recording completed",
+                                "file": str(stats.filename),
+                                "size_bytes": file_size,
+                                "duration": f"{stats.duration:.1f}s"
+                            }))
+                        else:
+                            print(json.dumps({"error": "Recording stopped but no file created"}), file=sys.stderr)
+                    else:
+                        print(json.dumps({"warning": "Recording was not active"}), file=sys.stderr)
+                        
+                except Exception as e:
+                    print(json.dumps({"error": f"Stop recording failed: {str(e)}"}), file=sys.stderr)
+                finally:
+                    try:
+                        recorder.close()
+                    except Exception:
+                        pass  # Ignore cleanup errors
             
             return 0
             
         elif args.transcribe:
-            # Initialize transcription
-            transcriber = create_transcriber(
-                model_size=WhisperModelSize(args.model) if args.model else WhisperModelSize.BASE,
-                language=args.language if args.language != 'auto' else None
-            )
+            audio_path = Path(args.transcribe)
+            file_size_mb = audio_path.stat().st_size / (1024 * 1024)
             
-            # Process file
-            result = transcriber.transcribe_file(Path(args.transcribe))
+            # Usar chunked transcriber para arquivos grandes (> 10MB) ou modelos grandes
+            model_name = args.model if args.model else "base"
+            use_chunked = file_size_mb > 10 or model_name in ["medium", "large-v2", "large-v3"]
             
-            # Export if format specified
-            if args.export_format:
-                export_path = export_transcription(
-                    result, 
-                    ExportFormat(args.export_format.upper()),
-                    Path(args.transcribe).stem
-                )
-                print(json.dumps({"status": "completed", "export_path": str(export_path)}))
+            if use_chunked:
+                print(f"Arquivo grande ({file_size_mb:.1f}MB) - usando transcrição por chunks com QUALIDADE otimizada")
+                from src.transcription.chunked_transcriber import transcribe_large_file
+                
+                try:
+                    # Mapear string para enum
+                    try:
+                        if model_name == "large-v2":
+                            model_enum = WhisperModelSize.LARGE_V2
+                        elif model_name == "large-v3":
+                            model_enum = WhisperModelSize.LARGE_V3
+                        else:
+                            model_enum = WhisperModelSize(model_name.upper())
+                    except:
+                        model_enum = WhisperModelSize.BASE  # fallback
+                    
+                    saved_path = transcribe_large_file(
+                        audio_path, 
+                        model_size=model_enum,  # Usar enum
+                        chunk_duration=300  # 5 minutos por chunk
+                    )
+                    print(f"Transcrição salva em: {saved_path}")
+                    
+                    # Read result for JSON output
+                    result_text = saved_path.read_text(encoding='utf-8')
+                    print(json.dumps({"status": "completed", "text": "Processado por chunks", "transcription_path": str(saved_path)}))
+                    
+                except Exception as e:
+                    print(json.dumps({"status": "error", "message": str(e)}))
+                    return 1
             else:
-                print(json.dumps({"status": "completed", "text": result.text}))
+                # Processamento normal para arquivos pequenos
+                try:
+                    if args.model == "large-v2":
+                        model_enum = WhisperModelSize.LARGE_V2
+                    elif args.model == "large-v3":
+                        model_enum = WhisperModelSize.LARGE_V3
+                    elif args.model:
+                        model_enum = WhisperModelSize(args.model.upper())
+                    else:
+                        model_enum = WhisperModelSize.BASE
+                except:
+                    model_enum = WhisperModelSize.BASE
+                
+                # Usar modo qualidade para todos os modelos medium e large
+                quality_mode = model_enum in [WhisperModelSize.MEDIUM, WhisperModelSize.LARGE_V2, WhisperModelSize.LARGE_V3]
+                
+                transcriber = create_transcriber(
+                    model_size=model_enum,
+                    language=args.language if args.language != 'auto' else None,
+                    quality_mode=quality_mode
+                )
+                
+                # Process file
+                result = transcriber.transcribe_file(audio_path)
+                
+                # Save transcription automatically in TXT format
+                audio_name = audio_path.stem
+                from datetime import datetime as dt
+                timestamp = dt.now().strftime("%Y%m%d_%H%M%S")
+                transcription_path = settings.transcriptions_dir / f"{audio_name}_transcription_{timestamp}.txt"
+                
+                saved_path = save_transcription_txt(result, transcription_path)
+                print(f"Transcrição salva em: {saved_path}")
+                
+                # Export if format specified
+                if args.export_format:
+                    export_path = export_transcription(
+                        result, 
+                        ExportFormat(args.export_format.upper()),
+                        Path(args.transcribe).stem
+                    )
+                    print(json.dumps({"status": "completed", "export_path": str(export_path), "transcription_path": str(saved_path)}))
+                else:
+                    print(json.dumps({"status": "completed", "text": result.full_text, "transcription_path": str(saved_path)}))
+            
             return 0
             
         elif args.export:

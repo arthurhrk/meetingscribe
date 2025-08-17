@@ -2,16 +2,21 @@
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "meetingscribe",
   "title": "Meetingscribe",
-  "description": "Sistema inteligente de transcrição para reuniões com processamento 100% local usando IA",
-  "icon": "assets/icon.png",
+  "description": "An intelligent meeting transcription system with 100% local processing using AI.",
+  "icon": "assets/icon.svg",
+  "author": "Arthurhrk",
   "license": "MIT",
   "version": "1.0.0",
+  "categories": [
+    "Productivity",
+    "Media"
+  ],
   "commands": [
     {
       "name": "record",
       "title": "Start Recording",
       "subtitle": "MeetingScribe",
-      "description": "Inicia uma nova gravação de áudio",
+      "description": "Starts a new audio recording",
       "mode": "view",
       "keywords": [
         "record",
@@ -23,8 +28,8 @@
     {
       "name": "recent",
       "title": "Recent Transcriptions",
-      "subtitle": "MeetingScribe", 
-      "description": "Lista as transcrições recentes com preview",
+      "subtitle": "MeetingScribe",
+      "description": "Lists recent transcriptions with a preview",
       "mode": "view",
       "keywords": [
         "recent",
@@ -37,7 +42,7 @@
       "name": "transcribe",
       "title": "Transcribe File",
       "subtitle": "MeetingScribe",
-      "description": "Transcreve um arquivo de áudio existente",
+      "description": "Transcribes an existing audio file",
       "mode": "view",
       "keywords": [
         "transcribe",
@@ -50,7 +55,7 @@
       "name": "status",
       "title": "System Status",
       "subtitle": "MeetingScribe",
-      "description": "Verifica o status do sistema e dispositivos",
+      "description": "Checks system and device status",
       "mode": "view",
       "keywords": [
         "status",
@@ -63,7 +68,7 @@
       "name": "export",
       "title": "Quick Export",
       "subtitle": "MeetingScribe",
-      "description": "Exporta a última transcrição rapidamente",
+      "description": "Quickly exports the last transcription",
       "mode": "view",
       "keywords": [
         "export",
@@ -76,7 +81,7 @@
       "name": "teams-monitor",
       "title": "Teams Auto Monitor",
       "subtitle": "MeetingScribe",
-      "description": "Monitora Teams automaticamente e grava reuniões",
+      "description": "Monitors Microsoft Teams automatically and records meetings",
       "mode": "view",
       "keywords": [
         "teams",
@@ -91,15 +96,15 @@
     {
       "name": "pythonPath",
       "title": "Python Path",
-      "description": "Caminho para o executável Python do MeetingScribe",
+      "description": "Path to the MeetingScribe Python executable",
       "type": "textfield",
       "default": "python",
       "required": false
     },
     {
       "name": "projectPath",
-      "title": "Project Path", 
-      "description": "Caminho para o diretório do MeetingScribe",
+      "title": "Project Path",
+      "description": "Path to the MeetingScribe project directory",
       "type": "textfield",
       "default": "",
       "required": true
@@ -107,28 +112,28 @@
     {
       "name": "defaultModel",
       "title": "Default Whisper Model",
-      "description": "Modelo Whisper padrão para transcrições",
+      "description": "Default Whisper model for transcriptions",
       "type": "dropdown",
       "default": "base",
       "data": [
         {
-          "title": "Tiny (Mais rápido)",
+          "title": "Tiny (Fastest)",
           "value": "tiny"
         },
         {
-          "title": "Base (Equilibrado)", 
+          "title": "Base (Balanced)",
           "value": "base"
         },
         {
-          "title": "Small (Boa precisão)",
+          "title": "Small (Good accuracy)",
           "value": "small"
         },
         {
-          "title": "Medium (Alta precisão)",
+          "title": "Medium (High accuracy)",
           "value": "medium"
         },
         {
-          "title": "Large-v3 (Máxima precisão)",
+          "title": "Large-v3 (Maximum accuracy)",
           "value": "large-v3"
         }
       ],
@@ -142,7 +147,7 @@
     "@raycast/eslint-config": "^1.0.6",
     "@types/node": "20.8.10",
     "@types/react": "18.2.27",
-    "eslint": "^8.51.0", 
+    "eslint": "^8.51.0",
     "prettier": "^3.0.3",
     "typescript": "^5.2.2"
   },

@@ -53,3 +53,6 @@ pyannote.audio==3.3.2
 # - No Windows, WASAPI está disponível nativamente
 # - Para GPU, certifique-se de ter drivers CUDA instalados
 # - A extensão Raycast se comunica via CLI com argumentos JSON
+
+# Dependências de Teste
+pytest==8.4.0

@@ -279,7 +279,7 @@ class RecordingConfiguration(BaseModel):
             raise ValueError(f"Output directory deve ser um diretório: {v}")
         return v
     
-    @root_validator
+    @root_validator(skip_on_failure=True)
     def validate_audio_configuration(cls, values):
         """Valida configuração de áudio completa."""
         sample_rate = values.get('sample_rate')
@@ -591,7 +591,7 @@ class TranscriptionResult(BaseTimestampedModel):
                 return min(seg.confidence for seg in segments)
         return v
     
-    @root_validator
+    @root_validator(skip_on_failure=True)
     def validate_consistency(cls, values):
         """Valida consistência entre campos."""
         segments = values.get('segments', [])
