@@ -81,6 +81,19 @@ except Exception:  # pragma: no cover
     RecordingConfig = None  # type: ignore
     AudioRecorderError = Exception  # type: ignore
 
+try:
+    from src.transcription import (
+        transcribe_audio_file,
+        TranscriptionError,
+        ExportFormat,
+        export_transcription,
+    )
+except Exception:  # pragma: no cover
+    transcribe_audio_file = None  # type: ignore
+    TranscriptionError = Exception  # type: ignore
+    ExportFormat = None  # type: ignore
+    export_transcription = None  # type: ignore
+
 
 def _record_start(params: Dict[str, Any]) -> Dict[str, Any]:
     if AudioRecorder is None:
@@ -176,6 +189,60 @@ def _handle(method: str, params: Dict[str, Any]) -> Dict[str, Any]:
         return _record_start(params)
     if method == "record.stop":
         return _record_stop(params)
+    if method == "transcribe.start":
+        if transcribe_audio_file is None:
+            return {"status": "error", "error": {"code": "E_TRANSCRIBE", "message": "Transcriber not available"}}
+        try:
+            audio_path = params.get("file") or params.get("path")
+            if not audio_path:
+                return {"status": "error", "error": {"code": "E_BAD_REQUEST", "message": "Missing file path"}}
+            # Synchronous for Phase 1
+            result = transcribe_audio_file(Path(audio_path))  # type: ignore
+            # Save default TXT into transcriptions dir
+            out_dir = settings.transcriptions_dir
+            out_dir.mkdir(parents=True, exist_ok=True)
+            base_name = Path(audio_path).stem + "_transcription"
+            out_path = out_dir / f"{base_name}.txt"
+            if export_transcription and ExportFormat:
+                export_transcription(result, out_path, ExportFormat.TXT)  # type: ignore
+            data = {
+                "file": audio_path,
+                "output": str(out_path),
+                "language": result.language,
+                "model": result.model_size,
+                "duration": result.duration,
+                "words": result.word_count,
+            }
+            return {"status": "success", "data": data}
+        except TranscriptionError as e:  # type: ignore
+            return {"status": "error", "error": {"code": "E_TRANSCRIBE", "message": str(e)}}
+        except Exception as e:
+            return {"status": "error", "error": {"code": "E_UNKNOWN", "message": str(e)}}
+    if method == "export.run":
+        if export_transcription is None or ExportFormat is None:
+            return {"status": "error", "error": {"code": "E_EXPORT", "message": "Exporter not available"}}
+        try:
+            # For Phase 1, re-run transcription quickly if no serialized result is available
+            audio_path = params.get("file")
+            fmt = (params.get("format") or "txt").lower()
+            if not audio_path:
+                return {"status": "error", "error": {"code": "E_BAD_REQUEST", "message": "Missing file path"}}
+            if ExportFormat is None:
+                return {"status": "error", "error": {"code": "E_EXPORT", "message": "Formats not available"}}
+            try:
+                fmt_enum = ExportFormat(fmt)  # type: ignore
+            except Exception:
+                return {"status": "error", "error": {"code": "E_BAD_REQUEST", "message": f"Unsupported format: {fmt}"}}
+            if transcribe_audio_file is None:
+                return {"status": "error", "error": {"code": "E_TRANSCRIBE", "message": "Transcriber not available"}}
+            result = transcribe_audio_file(Path(audio_path))  # type: ignore
+            out_dir = settings.exports_dir
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out_path = out_dir / f"{Path(audio_path).stem}.{fmt}"
+            export_transcription(result, out_path, fmt_enum)  # type: ignore
+            return {"status": "success", "data": {"output": str(out_path), "format": fmt}}
+        except Exception as e:
+            return {"status": "error", "error": {"code": "E_EXPORT", "message": str(e)}}
     return {"status": "error", "error": {"code": "E_NOT_IMPLEMENTED", "message": method}}
 
 

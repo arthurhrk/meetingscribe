@@ -38,6 +38,11 @@ def build_parser() -> argparse.ArgumentParser:
     rec_start = sub.add_parser("record-start", help="Start recording (until stop or duration)")
     rec_start.add_argument("--duration", type=int, default=None, help="Max duration in seconds")
     rec_stop = sub.add_parser("record-stop", help="Stop current recording")
+    trans = sub.add_parser("transcribe", help="Transcribe an audio file and save TXT")
+    trans.add_argument("file", help="Path to audio file")
+    export = sub.add_parser("export", help="Export transcription from audio file")
+    export.add_argument("file", help="Path to audio file")
+    export.add_argument("--format", default="txt", help="Format: txt|json|srt|vtt|xml|csv")
     return parser
 
 
@@ -55,6 +60,10 @@ class DaemonExecutor:
             return await self._do_record_start(args)
         if args.command == "record-stop":
             return await self._do_record_stop()
+        if args.command == "transcribe":
+            return await self._do_transcribe(args)
+        if args.command == "export":
+            return await self._do_export(args)
         self.ui.show_error("Unknown command")
         return 2
 
@@ -119,6 +128,26 @@ class DaemonExecutor:
         self.ui.show_success(f"Recording saved: {data.get('file_path')} ({int(data.get('duration',0))}s)")
         return 0
 
+    async def _do_transcribe(self, args) -> int:
+        resp = await self.daemon_client.request("transcribe.start", {"file": args.file})
+        result = resp.get("result") or {}
+        if result.get("status") != "success":
+            self.ui.show_error("Failed to transcribe")
+            return 2
+        data = result.get("data", {})
+        self.ui.show_success(f"Transcribed to: {data.get('output')} (lang={data.get('language')})")
+        return 0
+
+    async def _do_export(self, args) -> int:
+        resp = await self.daemon_client.request("export.run", {"file": args.file, "format": args.format})
+        result = resp.get("result") or {}
+        if result.get("status") != "success":
+            self.ui.show_error("Failed to export")
+            return 2
+        data = result.get("data", {})
+        self.ui.show_success(f"Exported: {data.get('output')} ({data.get('format')})")
+        return 0
+
 
 class FallbackExecutor:
     def __init__(self, runner: FallbackRunner, ui: RichUI) -> None:
@@ -134,6 +163,10 @@ class FallbackExecutor:
             return self._do_record_start(args)
         if args.command == "record-stop":
             return self._do_record_stop()
+        if args.command == "transcribe":
+            return self._do_transcribe(args)
+        if args.command == "export":
+            return self._do_export(args)
         self.ui.show_error("Unknown command")
         return 2
 
@@ -180,6 +213,45 @@ class FallbackExecutor:
         data = res.get("data", {})
         self.ui.show_success(f"Recording saved: {data.get('file_path')} ({int(data.get('duration',0))}s)")
         return 0
+
+    def _do_transcribe(self, args) -> int:
+        # Fallback: run synchronous minimal transcription/export TXT via daemon-equivalent path if available
+        try:
+            from src.transcription import transcribe_audio_file
+            from src.transcription import export_transcription, ExportFormat
+            from config import settings
+            result = transcribe_audio_file(Path(args.file))  # type: ignore
+            out_dir = settings.transcriptions_dir
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out_path = out_dir / f"{Path(args.file).stem}_transcription.txt"
+            export_transcription(result, out_path, ExportFormat.TXT)  # type: ignore
+            self.ui.show_success(f"Transcribed to: {out_path}")
+            return 0
+        except Exception as e:
+            self.ui.show_error(f"Transcription failed: {e}")
+            return 2
+
+    def _do_export(self, args) -> int:
+        try:
+            from src.transcription import transcribe_audio_file
+            from src.transcription import export_transcription, ExportFormat
+            from config import settings
+            fmt = args.format.lower()
+            try:
+                fmt_enum = ExportFormat(fmt)  # type: ignore
+            except Exception:
+                self.ui.show_error(f"Unsupported format: {fmt}")
+                return 2
+            result = transcribe_audio_file(Path(args.file))  # type: ignore
+            out_dir = settings.exports_dir
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out_path = out_dir / f"{Path(args.file).stem}.{fmt}"
+            export_transcription(result, out_path, fmt_enum)  # type: ignore
+            self.ui.show_success(f"Exported: {out_path} ({fmt})")
+            return 0
+        except Exception as e:
+            self.ui.show_error(f"Export failed: {e}")
+            return 2
 
 
 async def main() -> int:
