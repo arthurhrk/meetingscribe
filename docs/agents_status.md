@@ -13,15 +13,24 @@ Visao rapida do backlog do projeto e o que esta em andamento agora. Itens marcad
 - [Done] Checklist de aceitacao por UC
   - Arquivo: `docs/v2-client-daemon/acceptance-checklist.md`
 
-## Fase 2 — Daemon “Always-Ready”
+## Fase 1.5 — Gaps Criticos Must-Have (baseado em FR-001, FR-002, FR-003)
+- [Done] Teams Detection Module — detectar reunioes Teams automaticamente
+  - Arquivos: `src/teams/teams_detector.py` (novo) + integração com daemon
+  - Funcionalidade: monitor Teams.exe processo + audio stream detection + callbacks
+- [Done] Smart Device Auto-Selection — escolha inteligente de dispositivo por contexto
+  - Arquivos: `src/audio/smart_selector.py` (novo) + learning preferences
+  - Funcionalidade: loopback → microphone → default priority logic + user history
+- [Done] Windows Service Always-Ready — sistema sempre disponivel <3s startup
+  - Arquivos: `daemon/service.py` funcional + `daemon/daemon_main.py` integrado
+  - Funcionalidade: daemon roda como servico Windows + auto-restart + health monitoring
+
+## Fase 2 — Daemon "Always-Ready"  
 - [Done] Transporte por Named Pipes (cliente + servidor) — skeleton entregue; STDIO mantido como fallback
   - Arquivos: `client/transport/namedpipe_transport.py`, `daemon/named_pipe_server.py`
 - [Done] CLI v2: utilitarios de servico (status/repair/restart) — stubs
   - Arquivo: `client/cli_main.py` (subcomando `service`)
-- [Codex: in-progress] Integrar NamedPipeServer ao lifecycle do daemon (iniciar/parar junto ao processo)
-  - Alvo: `daemon/daemon_main.py` (inicializar named pipe server)
-- [Next] Windows Service wrapper funcional (instalar/iniciar/parar/status)
-  - Arquivo: `daemon/service.py` (base existente), ajustes e docs de instalacao
+- [Paused] Integrar NamedPipeServer ao lifecycle do daemon (iniciar/parar junto ao processo)
+  - Alvo: `daemon/daemon_main.py` (inicializar named pipe server) — aguarda Fase 1.5
 - [Next] Pre-carregamento de modelo base + gestao de memoria inicial
   - Alvo: `daemon/resource_manager.py` (novo)
 

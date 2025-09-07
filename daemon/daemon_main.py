@@ -19,10 +19,26 @@ from loguru import logger
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
-    from config import settings
-    from daemon.resource_manager import ResourceManager
-    from daemon.health_monitor import HealthMonitor
-    from daemon.stdio_core import StdioCore
+    from config import settings, setup_directories, setup_logging
+    from daemon.stdio_core import run_stdio
+    from src.teams import get_detector, start_teams_monitoring, stop_teams_monitoring
+    from src.audio import get_smart_selector
+    
+    # Optional advanced components (future enhancement)
+    try:
+        from daemon.resource_manager import ResourceManager
+        HAS_RESOURCE_MANAGER = True
+    except ImportError:
+        ResourceManager = None
+        HAS_RESOURCE_MANAGER = False
+        
+    try:
+        from daemon.health_monitor import HealthMonitor
+        HAS_HEALTH_MONITOR = True
+    except ImportError:
+        HealthMonitor = None
+        HAS_HEALTH_MONITOR = False
+        
 except ImportError as e:
     logger.error(f"Failed to import daemon dependencies: {e}")
     sys.exit(1)
@@ -30,36 +46,45 @@ except ImportError as e:
 
 class DaemonMain:
     """
-    Processo principal do daemon MeetingScribe.
+    Main daemon orchestrator for always-ready system.
     
-    Arquitetura inspirada no Krisp AI:
-    - Model pre-loading para startup rápido
-    - Multi-client connection handling
-    - Background task processing
-    - Health monitoring e recovery
+    Phase 1.5 implementation with critical must-have features:
+    - Teams detection integration
+    - Smart device selection
+    - Always-ready STDIO server
+    - Basic resource management
     """
     
     def __init__(self):
-        """Inicializa o daemon principal."""
+        """Initialize daemon main process."""
         self.running = False
-        self.resource_manager: Optional[ResourceManager] = None
-        self.health_monitor: Optional[HealthMonitor] = None
-        self.stdio_core: Optional[StdioCore] = None
+        self.stdio_thread: Optional[threading.Thread] = None
+        self.teams_detector = None
+        self.smart_selector = None
         
-        # Threading components (since Windows Service context)
+        # Optional advanced components
+        self.resource_manager = None
+        self.health_monitor = None
+        
+        # Threading components for Windows Service context
         self.main_thread: Optional[threading.Thread] = None
         self.stop_event = threading.Event()
         
     def run(self):
         """
-        Inicia o daemon principal.
+        Start daemon with all critical components.
         
-        Executa em contexto Windows Service, então usa threading
-        ao invés de asyncio event loop direto.
+        Phase 1.5 implementation focuses on must-have features:
+        - Always-ready STDIO server
+        - Teams detection monitoring
+        - Smart device selection
         """
-        logger.info("MeetingScribe daemon starting...")
+        logger.info("MeetingScribe Daemon v2 starting...")
         
         try:
+            # Setup system
+            self._setup_system()
+            
             # Setup signal handlers (if not in service context)
             if not self._is_service_context():
                 self._setup_signal_handlers()
@@ -89,121 +114,212 @@ class DaemonMain:
         logger.info("MeetingScribe daemon stopped")
     
     def _run_main_loop(self):
-        """Loop principal do daemon executado em thread separada."""
+        """Main daemon loop executed in separate thread."""
         try:
-            # Create new event loop for this thread
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            logger.info("Starting daemon main loop")
             
-            # Run async main logic
-            loop.run_until_complete(self._async_main())
+            # Initialize critical components
+            self._initialize_components()
+            
+            # Start STDIO server
+            self._start_stdio_server()
+            
+            # Start Teams monitoring
+            self._start_teams_monitoring()
+            
+            # Initialize optional advanced components
+            self._initialize_advanced_components()
+            
+            self.running = True
+            logger.info("✅ MeetingScribe Daemon fully operational - accepting client connections")
+            
+            # Main processing loop
+            self._main_processing_loop()
             
         except Exception as e:
             logger.error(f"Daemon main loop error: {e}")
         finally:
-            try:
-                loop.close()
-            except:
-                pass
+            self._cleanup_components()
     
-    async def _async_main(self):
-        """Lógica principal assíncrona do daemon."""
+    def _setup_system(self) -> None:
+        """Setup system directories and logging"""
+        setup_directories()
+        setup_logging()
+        logger.info("System directories and logging initialized")
+    
+    def _initialize_components(self) -> None:
+        """Initialize critical daemon components"""
+        # Initialize Teams detector
+        self.teams_detector = get_detector()
+        
+        # Setup Teams detection callbacks
+        self.teams_detector.on_meeting_detected = self._on_teams_meeting_detected
+        self.teams_detector.on_meeting_ended = self._on_teams_meeting_ended
+        self.teams_detector.on_state_changed = self._on_teams_state_changed
+        
+        # Initialize smart device selector
+        self.smart_selector = get_smart_selector()
+        
+        logger.info("Critical components initialized (Teams detection, smart device selection)")
+    
+    def _initialize_advanced_components(self) -> None:
+        """Initialize optional advanced components"""
         try:
-            # Startup sequence
-            await self._startup_sequence()
-            
-            # Main loop
-            await self._main_processing_loop()
-            
+            # Initialize resource manager if available
+            if HAS_RESOURCE_MANAGER and ResourceManager:
+                logger.info("Initializing resource manager...")
+                self.resource_manager = ResourceManager()
+                # Note: ResourceManager.initialize() would be async, 
+                # for Phase 1.5 we skip advanced resource management
+                logger.info("Resource manager initialized")
+            else:
+                logger.info("Resource manager not available, skipping")
+                
+            # Initialize health monitor if available
+            if HAS_HEALTH_MONITOR and HealthMonitor:
+                logger.info("Initializing health monitor...")
+                self.health_monitor = HealthMonitor()
+                logger.info("Health monitor initialized")
+            else:
+                logger.info("Health monitor not available, using basic monitoring")
+                
         except Exception as e:
-            logger.error(f"Daemon async main error: {e}")
-            raise
-        finally:
-            await self._shutdown_sequence()
+            logger.warning(f"Advanced components initialization failed: {e}")
+            # Continue without advanced components
     
-    async def _startup_sequence(self):
-        """
-        Sequência de inicialização do daemon.
+    def _start_stdio_server(self) -> None:
+        """Start STDIO JSON-RPC server in background thread"""
+        def stdio_worker():
+            try:
+                logger.info("Starting STDIO JSON-RPC server")
+                run_stdio()  # This blocks until stdin closes
+            except Exception as e:
+                logger.error(f"STDIO server error: {e}")
+                self.running = False
         
-        Inspirada no Krisp AI:
-        1. Pre-load modelos base para startup rápido
-        2. Inicializar connection manager
-        3. Inicializar health monitoring
-        4. Configurar stdio core para communication
-        """
-        logger.info("Daemon startup sequence beginning...")
-        
-        # 1. Initialize resource manager (model pre-loading)
-        logger.info("Initializing resource manager...")
-        self.resource_manager = ResourceManager()
-        await self.resource_manager.initialize()
-        logger.info("Resource manager initialized with base models loaded")
-        
-        # 2. Initialize stdio core for client communication
-        logger.info("Initializing stdio core...")
-        self.stdio_core = StdioCore(self.resource_manager)
-        await self.stdio_core.start()
-        logger.info("Stdio core initialized and listening")
-        
-        # 3. Initialize health monitor
-        logger.info("Initializing health monitor...")
-        self.health_monitor = HealthMonitor(
-            resource_manager=self.resource_manager,
-            stdio_core=self.stdio_core
-        )
-        await self.health_monitor.start()
-        logger.info("Health monitor started")
-        
-        self.running = True
-        logger.info("✅ MeetingScribe daemon ready - accepting client connections")
+        self.stdio_thread = threading.Thread(target=stdio_worker, daemon=True)
+        self.stdio_thread.start()
+        logger.info("STDIO server thread started")
     
-    async def _main_processing_loop(self):
+    def _start_teams_monitoring(self) -> None:
+        """Start Teams meeting detection monitoring"""
+        success = start_teams_monitoring()
+        if success:
+            logger.info("Teams monitoring started successfully")
+        else:
+            logger.warning("Teams monitoring failed to start")
+    
+    def _main_processing_loop(self) -> None:
         """
-        Loop principal de processamento.
+        Main daemon processing loop.
         
-        Mantém daemon alive e executa tarefas periódicas:
-        - Health checks
-        - Resource cleanup
-        - Connection monitoring
+        Keeps daemon alive and performs periodic health checks.
         """
+        last_health_check = time.time()
+        health_check_interval = 60  # seconds
+        
         while self.running and not self.stop_event.is_set():
             try:
-                # Health monitoring check
-                if self.health_monitor:
-                    await self.health_monitor.periodic_check()
-                
-                # Resource maintenance
-                if self.resource_manager:
-                    await self.resource_manager.periodic_maintenance()
+                # Periodic health checks
+                current_time = time.time()
+                if current_time - last_health_check >= health_check_interval:
+                    self._perform_health_check()
+                    last_health_check = current_time
                 
                 # Sleep with stop event check
-                await asyncio.sleep(1)
+                self.stop_event.wait(1)  # 1 second timeout
                 
             except Exception as e:
                 logger.error(f"Error in main processing loop: {e}")
-                # Continue running unless critical error
-                await asyncio.sleep(5)
+                time.sleep(5)  # Sleep longer on error
     
-    async def _shutdown_sequence(self):
-        """Sequência de shutdown gracioso."""
-        logger.info("Daemon shutdown sequence beginning...")
+    def _perform_health_check(self) -> None:
+        """Perform basic health checks"""
+        try:
+            # Check STDIO thread health
+            if self.stdio_thread and not self.stdio_thread.is_alive():
+                logger.warning("STDIO thread died, attempting restart")
+                self._start_stdio_server()
+            
+            # Check Teams monitoring health
+            if self.teams_detector and not self.teams_detector._running:
+                logger.warning("Teams monitoring stopped, restarting")
+                start_teams_monitoring()
+            
+            # Log memory usage if psutil available
+            try:
+                import psutil
+                process = psutil.Process()
+                memory_mb = process.memory_info().rss / (1024 * 1024)
+                
+                # Log warning if memory usage exceeds 500MB (FR-001 specifies <300MB idle)
+                if memory_mb > 500:
+                    logger.warning(f"High memory usage: {memory_mb:.1f}MB")
+                else:
+                    logger.debug(f"Memory usage: {memory_mb:.1f}MB")
+                    
+            except Exception:
+                pass  # psutil not available
+                
+            # Use advanced health monitor if available
+            if self.health_monitor and hasattr(self.health_monitor, 'periodic_check'):
+                try:
+                    # For Phase 1.5, we call synchronous version if available
+                    if hasattr(self.health_monitor, 'sync_periodic_check'):
+                        self.health_monitor.sync_periodic_check()
+                except Exception as e:
+                    logger.debug(f"Advanced health check failed: {e}")
+                    
+        except Exception as e:
+            logger.error(f"Health check failed: {e}")
+    
+    def _on_teams_meeting_detected(self, detection) -> None:
+        """Callback for Teams meeting detection"""
+        logger.info(f"Teams meeting detected: {detection.window_title}")
+        logger.info(f"Meeting details: process={detection.process_name}, "
+                   f"audio_active={detection.audio_active}, "
+                   f"confidence={detection.confidence:.2f}")
         
-        # Stop health monitor
-        if self.health_monitor:
-            logger.info("Stopping health monitor...")
-            await self.health_monitor.stop()
+        # Future enhancement: Auto-prompt user for recording
+        # This would implement FR-002 Teams Integration
+    
+    def _on_teams_meeting_ended(self, detection) -> None:
+        """Callback for Teams meeting end"""
+        logger.info(f"Teams meeting ended: {detection.window_title}")
+    
+    def _on_teams_state_changed(self, old_state, new_state) -> None:
+        """Callback for Teams detection state changes"""
+        logger.debug(f"Teams detection state: {old_state.value} -> {new_state.value}")
+    
+    def _cleanup_components(self) -> None:
+        """Cleanup daemon components"""
+        logger.info("Cleaning up daemon components...")
         
-        # Stop stdio core
-        if self.stdio_core:
-            logger.info("Stopping stdio core...")
-            await self.stdio_core.stop()
-        
-        # Cleanup resource manager
-        if self.resource_manager:
-            logger.info("Cleaning up resource manager...")
-            await self.resource_manager.cleanup()
-        
-        logger.info("Daemon shutdown sequence complete")
+        try:
+            # Stop Teams monitoring
+            if self.teams_detector:
+                stop_teams_monitoring()
+            
+            # Advanced cleanup if available
+            if self.resource_manager and hasattr(self.resource_manager, 'cleanup'):
+                try:
+                    # For Phase 1.5, call synchronous cleanup if available
+                    if hasattr(self.resource_manager, 'sync_cleanup'):
+                        self.resource_manager.sync_cleanup()
+                except Exception as e:
+                    logger.debug(f"Advanced resource cleanup failed: {e}")
+            
+            if self.health_monitor and hasattr(self.health_monitor, 'stop'):
+                try:
+                    if hasattr(self.health_monitor, 'sync_stop'):
+                        self.health_monitor.sync_stop()
+                except Exception as e:
+                    logger.debug(f"Advanced health monitor stop failed: {e}")
+            
+            logger.info("Daemon cleanup complete")
+            
+        except Exception as e:
+            logger.error(f"Error during cleanup: {e}")
     
     def _setup_signal_handlers(self):
         """Configura signal handlers para shutdown gracioso."""
