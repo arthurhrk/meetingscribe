@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Optional
+from dataclasses import dataclass, asdict
+from typing import Any, Optional, List, Dict
 import platform
 import shutil
 
@@ -11,6 +11,10 @@ except Exception:  # pragma: no cover - optional at runtime
     psutil = None  # type: ignore
 
 from config import settings, setup_directories
+try:
+    from device_manager import DeviceManager
+except Exception:  # pragma: no cover
+    DeviceManager = None  # type: ignore
 
 
 @dataclass
@@ -78,3 +82,26 @@ class FallbackRunner:
             pyaudio_available=pyaudio_available,
         )
 
+    def devices(self) -> List[Dict[str, Any]]:
+        """Return audio devices using v1 DeviceManager (if available)."""
+        if DeviceManager is None:
+            return []
+        try:
+            with DeviceManager() as dm:  # type: ignore
+                devices = dm.list_all_devices()  # type: ignore
+                items: List[Dict[str, Any]] = []
+                for d in devices:
+                    dd = asdict(d)
+                    items.append({
+                        "index": dd.get("index"),
+                        "name": dd.get("name"),
+                        "host_api": dd.get("host_api"),
+                        "is_loopback": dd.get("is_loopback"),
+                        "is_default": dd.get("is_default"),
+                        "in_channels": dd.get("max_input_channels"),
+                        "out_channels": dd.get("max_output_channels"),
+                        "default_sample_rate": dd.get("default_sample_rate"),
+                    })
+                return items
+        except Exception:
+            return []

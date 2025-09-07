@@ -12,6 +12,14 @@ except Exception:  # pragma: no cover
     psutil = None  # type: ignore
 
 from config import settings, setup_directories, setup_logging
+from dataclasses import asdict
+from typing import List
+try:
+    from device_manager import DeviceManager, AudioDeviceError, WASAPINotAvailableError
+except Exception:  # pragma: no cover
+    DeviceManager = None  # type: ignore
+    AudioDeviceError = Exception  # type: ignore
+    WASAPINotAvailableError = Exception  # type: ignore
 
 
 def _system_status() -> Dict[str, Any]:
@@ -68,6 +76,32 @@ def _handle(method: str, params: Dict[str, Any]) -> Dict[str, Any]:
         return {"status": "success", "data": {"pong": True, "version": "2.0.0"}}
     if method == "system.status":
         return {"status": "success", "data": _system_status()}
+    if method == "devices.list":
+        try:
+            if DeviceManager is None:
+                raise AudioDeviceError("Device manager not available")
+            with DeviceManager() as dm:  # type: ignore
+                devices = dm.list_all_devices()  # type: ignore
+                items = []
+                for d in devices:
+                    dd = asdict(d)
+                    items.append({
+                        "index": dd.get("index"),
+                        "name": dd.get("name"),
+                        "host_api": dd.get("host_api"),
+                        "is_loopback": dd.get("is_loopback"),
+                        "is_default": dd.get("is_default"),
+                        "in_channels": dd.get("max_input_channels"),
+                        "out_channels": dd.get("max_output_channels"),
+                        "default_sample_rate": dd.get("default_sample_rate"),
+                    })
+                return {"status": "success", "data": {"devices": items}}
+        except WASAPINotAvailableError as e:  # type: ignore
+            return {"status": "error", "error": {"code": "E_WASAPI", "message": str(e)}}
+        except AudioDeviceError as e:  # type: ignore
+            return {"status": "error", "error": {"code": "E_AUDIO", "message": str(e)}}
+        except Exception as e:
+            return {"status": "error", "error": {"code": "E_UNKNOWN", "message": str(e)}}
     return {"status": "error", "error": {"code": "E_NOT_IMPLEMENTED", "message": method}}
 
 
@@ -101,4 +135,3 @@ def run_stdio() -> None:
 
 if __name__ == "__main__":
     run_stdio()
-

@@ -34,6 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command")
 
     sub.add_parser("status", help="Show system status (unified view)")
+    sub.add_parser("devices", help="List audio devices")
     return parser
 
 
@@ -45,6 +46,8 @@ class DaemonExecutor:
     async def execute(self, args: argparse.Namespace) -> int:
         if args.command == "status":
             return await self._do_status()
+        if args.command == "devices":
+            return await self._do_devices()
         self.ui.show_error("Unknown command")
         return 2
 
@@ -75,6 +78,17 @@ class DaemonExecutor:
         self.ui.show_success("Status collected (daemon)")
         return 0
 
+    async def _do_devices(self) -> int:
+        resp = await self.daemon_client.request("devices.list", {})
+        result = resp.get("result") or {}
+        if result.get("status") != "success":
+            self.ui.show_error("Failed to list devices from daemon")
+            return 2
+        devices = result.get("data", {}).get("devices", [])
+        self.ui.device_table(devices)
+        self.ui.show_success(f"Devices listed: {len(devices)}")
+        return 0
+
 
 class FallbackExecutor:
     def __init__(self, runner: FallbackRunner, ui: RichUI) -> None:
@@ -84,6 +98,8 @@ class FallbackExecutor:
     async def execute(self, args: argparse.Namespace) -> int:
         if args.command == "status":
             return self._do_status()
+        if args.command == "devices":
+            return self._do_devices()
         self.ui.show_error("Unknown command")
         return 2
 
@@ -105,6 +121,12 @@ class FallbackExecutor:
 
         self.ui.kv_table("Storage Dirs", {k: ("ok" if v else "missing") for k, v in status.storage_dirs.items()})
         self.ui.show_success("Status collected (fallback)")
+        return 0
+
+    def _do_devices(self) -> int:
+        devices = self.runner.devices()
+        self.ui.device_table(devices)
+        self.ui.show_success(f"Devices listed: {len(devices)}")
         return 0
 
 
