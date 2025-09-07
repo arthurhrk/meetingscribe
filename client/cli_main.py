@@ -35,6 +35,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("status", help="Show system status (unified view)")
     sub.add_parser("devices", help="List audio devices")
+    rec_start = sub.add_parser("record-start", help="Start recording (until stop or duration)")
+    rec_start.add_argument("--duration", type=int, default=None, help="Max duration in seconds")
+    rec_stop = sub.add_parser("record-stop", help="Stop current recording")
     return parser
 
 
@@ -48,6 +51,10 @@ class DaemonExecutor:
             return await self._do_status()
         if args.command == "devices":
             return await self._do_devices()
+        if args.command == "record-start":
+            return await self._do_record_start(args)
+        if args.command == "record-stop":
+            return await self._do_record_stop()
         self.ui.show_error("Unknown command")
         return 2
 
@@ -89,6 +96,29 @@ class DaemonExecutor:
         self.ui.show_success(f"Devices listed: {len(devices)}")
         return 0
 
+    async def _do_record_start(self, args) -> int:
+        params = {}
+        if args.duration:
+            params["duration"] = int(args.duration)
+        resp = await self.daemon_client.request("record.start", params)
+        result = resp.get("result") or {}
+        if result.get("status") != "success":
+            self.ui.show_error("Failed to start recording")
+            return 2
+        data = result.get("data", {})
+        self.ui.show_success(f"Recording started: {data.get('session_id')} -> {data.get('file_path')}")
+        return 0
+
+    async def _do_record_stop(self) -> int:
+        resp = await self.daemon_client.request("record.stop", {})
+        result = resp.get("result") or {}
+        if result.get("status") != "success":
+            self.ui.show_error("Failed to stop recording")
+            return 2
+        data = result.get("data", {})
+        self.ui.show_success(f"Recording saved: {data.get('file_path')} ({int(data.get('duration',0))}s)")
+        return 0
+
 
 class FallbackExecutor:
     def __init__(self, runner: FallbackRunner, ui: RichUI) -> None:
@@ -100,6 +130,10 @@ class FallbackExecutor:
             return self._do_status()
         if args.command == "devices":
             return self._do_devices()
+        if args.command == "record-start":
+            return self._do_record_start(args)
+        if args.command == "record-stop":
+            return self._do_record_stop()
         self.ui.show_error("Unknown command")
         return 2
 
@@ -127,6 +161,24 @@ class FallbackExecutor:
         devices = self.runner.devices()
         self.ui.device_table(devices)
         self.ui.show_success(f"Devices listed: {len(devices)}")
+        return 0
+
+    def _do_record_start(self, args) -> int:
+        res = self.runner.record_start(duration=getattr(args, "duration", None))
+        if res.get("status") != "success":
+            self.ui.show_error(res.get("error", {}).get("message", "Failed to start"))
+            return 2
+        data = res.get("data", {})
+        self.ui.show_success(f"Recording started: {data.get('session_id')} -> {data.get('file_path')}")
+        return 0
+
+    def _do_record_stop(self) -> int:
+        res = self.runner.record_stop()
+        if res.get("status") != "success":
+            self.ui.show_error(res.get("error", {}).get("message", "Failed to stop"))
+            return 2
+        data = res.get("data", {})
+        self.ui.show_success(f"Recording saved: {data.get('file_path')} ({int(data.get('duration',0))}s)")
         return 0
 
 

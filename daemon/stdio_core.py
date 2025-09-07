@@ -71,6 +71,76 @@ def _system_status() -> Dict[str, Any]:
     }
 
 
+# In-memory recordings registry (simple stub for Phase 1)
+RECORDINGS: Dict[str, Any] = {}
+
+try:
+    from audio_recorder import AudioRecorder, RecordingConfig, AudioRecorderError
+except Exception:  # pragma: no cover
+    AudioRecorder = None  # type: ignore
+    RecordingConfig = None  # type: ignore
+    AudioRecorderError = Exception  # type: ignore
+
+
+def _record_start(params: Dict[str, Any]) -> Dict[str, Any]:
+    if AudioRecorder is None:
+        return {"status": "error", "error": {"code": "E_RECORDER", "message": "Recorder not available"}}
+    try:
+        duration = params.get("duration")
+        device_index = params.get("device_index")
+        filename = params.get("filename")
+
+        # Create recorder
+        recorder = AudioRecorder()
+        if device_index is not None and DeviceManager is not None:  # type: ignore
+            with DeviceManager() as dm:  # type: ignore
+                device = dm.get_device_by_index(int(device_index))  # type: ignore
+            # Build config using that device
+            cfg = RecordingConfig(device=device)
+            if duration:
+                cfg.max_duration = int(duration)
+            recorder._config = cfg  # use provided config
+        # Auto-select device if not configured
+        if recorder._config is None:
+            ok = recorder.set_device_auto()
+            if not ok:
+                return {"status": "error", "error": {"code": "E_DEVICE", "message": "No suitable device"}}
+            if duration:
+                recorder._config.max_duration = int(duration)
+
+        path = recorder.start_recording(filename=filename)
+        session_id = f"rec-{int(time.time())}"
+        RECORDINGS[session_id] = recorder
+        return {"status": "success", "data": {"session_id": session_id, "file_path": path}}
+    except (AudioRecorderError, AudioDeviceError) as e:  # type: ignore
+        return {"status": "error", "error": {"code": "E_RECORD_START", "message": str(e)}}
+    except Exception as e:
+        return {"status": "error", "error": {"code": "E_UNKNOWN", "message": str(e)}}
+
+
+def _record_stop(params: Dict[str, Any]) -> Dict[str, Any]:
+    session_id = params.get("session_id")
+    if not session_id:
+        # Stop the last one
+        if not RECORDINGS:
+            return {"status": "error", "error": {"code": "E_NO_SESSION", "message": "No active recordings"}}
+        session_id = sorted(RECORDINGS.keys())[-1]
+    recorder = RECORDINGS.pop(session_id, None)
+    if recorder is None:
+        return {"status": "error", "error": {"code": "E_INVALID_SESSION", "message": "Unknown session"}}
+    try:
+        stats = recorder.stop_recording()
+        data = {
+            "session_id": session_id,
+            "file_path": stats.filename,
+            "duration": stats.duration,
+            "size": stats.file_size,
+        }
+        return {"status": "success", "data": data}
+    except Exception as e:  # pragma: no cover
+        return {"status": "error", "error": {"code": "E_RECORD_STOP", "message": str(e)}}
+
+
 def _handle(method: str, params: Dict[str, Any]) -> Dict[str, Any]:
     if method == "ping":
         return {"status": "success", "data": {"pong": True, "version": "2.0.0"}}
@@ -102,6 +172,10 @@ def _handle(method: str, params: Dict[str, Any]) -> Dict[str, Any]:
             return {"status": "error", "error": {"code": "E_AUDIO", "message": str(e)}}
         except Exception as e:
             return {"status": "error", "error": {"code": "E_UNKNOWN", "message": str(e)}}
+    if method == "record.start":
+        return _record_start(params)
+    if method == "record.stop":
+        return _record_stop(params)
     return {"status": "error", "error": {"code": "E_NOT_IMPLEMENTED", "message": method}}
 
 

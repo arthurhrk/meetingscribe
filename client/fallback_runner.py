@@ -15,6 +15,11 @@ try:
     from device_manager import DeviceManager
 except Exception:  # pragma: no cover
     DeviceManager = None  # type: ignore
+try:
+    from audio_recorder import AudioRecorder, AudioRecorderError
+except Exception:  # pragma: no cover
+    AudioRecorder = None  # type: ignore
+    AudioRecorderError = Exception  # type: ignore
 
 
 @dataclass
@@ -38,6 +43,8 @@ class FallbackRunner:
 
     def __init__(self) -> None:
         setup_directories()
+        self._recorder: Optional[AudioRecorder] = None  # type: ignore
+        self._session_id: Optional[str] = None
 
     def status(self) -> FallbackStatus:
         # Readiness is true if basic folders exist and we can write logs/storage.
@@ -105,3 +112,40 @@ class FallbackRunner:
                 return items
         except Exception:
             return []
+
+    def record_start(self, duration: Optional[int] = None) -> Dict[str, Any]:
+        if AudioRecorder is None:
+            return {"status": "error", "error": {"code": "E_RECORDER", "message": "Recorder not available"}}
+        if self._recorder and getattr(self._recorder, "is_recording")():  # type: ignore
+            return {"status": "error", "error": {"code": "E_ALREADY", "message": "Recording already in progress"}}
+        try:
+            self._recorder = AudioRecorder()  # type: ignore
+            ok = self._recorder.set_device_auto()  # type: ignore
+            if not ok:
+                return {"status": "error", "error": {"code": "E_DEVICE", "message": "No suitable device"}}
+            if duration:
+                self._recorder._config.max_duration = int(duration)  # type: ignore
+            path = self._recorder.start_recording()  # type: ignore
+            self._session_id = f"rec-{int(time.time())}"
+            return {"status": "success", "data": {"session_id": self._session_id, "file_path": path}}
+        except AudioRecorderError as e:  # type: ignore
+            return {"status": "error", "error": {"code": "E_RECORD_START", "message": str(e)}}
+        except Exception as e:
+            return {"status": "error", "error": {"code": "E_UNKNOWN", "message": str(e)}}
+
+    def record_stop(self) -> Dict[str, Any]:
+        if not self._recorder:
+            return {"status": "error", "error": {"code": "E_NO_SESSION", "message": "No active recording"}}
+        try:
+            stats = self._recorder.stop_recording()  # type: ignore
+            sid = self._session_id
+            self._recorder = None
+            self._session_id = None
+            return {"status": "success", "data": {
+                "session_id": sid,
+                "file_path": stats.filename,
+                "duration": stats.duration,
+                "size": stats.file_size,
+            }}
+        except Exception as e:
+            return {"status": "error", "error": {"code": "E_RECORD_STOP", "message": str(e)}}
