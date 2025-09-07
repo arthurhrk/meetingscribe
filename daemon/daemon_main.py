@@ -327,21 +327,14 @@ class DaemonMain:
             logger.error(f"Memory optimization startup failed: {e}")
     
     def _memory_cleanup_callback(self) -> None:
-        """Memory cleanup callback for when usage exceeds target"""
+        """Memory cleanup callback for when usage exceeds FR-001 target"""
         logger.info("Executing memory cleanup due to high usage")
         
         try:
-            # Stop non-critical monitoring temporarily
-            if self.teams_detector and hasattr(self.teams_detector, 'pause'):
-                self.teams_detector.pause()
-                
-            # Clear any caches
-            if hasattr(self.smart_selector, 'clear_cache'):
-                self.smart_selector.clear_cache()
-                
-            # Force garbage collection
+            # Force garbage collection to free unused memory
             import gc
-            gc.collect()
+            collected = gc.collect()
+            logger.debug(f"Garbage collection freed {collected} objects")
             
             logger.info("Memory cleanup completed")
             

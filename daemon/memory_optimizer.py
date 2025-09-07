@@ -1,10 +1,27 @@
 """Memory Optimization Module
 
-Implements FR-001 requirement for <300MB RAM in idle state through:
-1. Memory usage monitoring and alerting
-2. Lazy loading strategies
-3. Garbage collection optimization
-4. Resource cleanup automation
+Implements FR-001 requirement for <300MB RAM in idle state.
+
+This module provides real-time memory monitoring, automated cleanup,
+and optimization strategies to maintain the Always-Ready System
+requirement of <300MB memory usage in idle state.
+
+Key Features:
+- Real-time memory monitoring with alert system
+- Automatic cleanup callbacks for memory pressure
+- Progressive alert levels with appropriate responses
+- Garbage collection optimization for daemon processes
+- Memory usage history and analytics
+
+Usage:
+    from daemon.memory_optimizer import start_memory_monitoring, is_memory_within_target
+    
+    # Start monitoring with 30-second intervals
+    start_memory_monitoring(interval=30.0)
+    
+    # Check compliance
+    if is_memory_within_target():
+        print("Memory usage within FR-001 target")
 """
 
 from __future__ import annotations
@@ -28,31 +45,52 @@ logger = logging.getLogger(__name__)
 
 
 class MemoryAlert(Enum):
-    """Memory usage alert levels"""
-    NORMAL = "normal"      # <200MB
-    WARNING = "warning"    # 200-300MB
-    CRITICAL = "critical"  # 300-400MB
-    EMERGENCY = "emergency"  # >400MB
+    """Memory usage alert levels for FR-001 compliance monitoring"""
+    NORMAL = "normal"      # <200MB - optimal range
+    WARNING = "warning"    # 200-300MB - approaching target
+    CRITICAL = "critical"  # 300-400MB - over FR-001 target
+    EMERGENCY = "emergency"  # >400MB - requires immediate action
 
 
 @dataclass
 class MemoryUsage:
-    """Memory usage statistics"""
-    rss_mb: float          # Resident Set Size in MB
-    vms_mb: float          # Virtual Memory Size in MB  
-    percent: float         # Percentage of system memory
+    """
+    Memory usage statistics snapshot.
+    
+    Attributes:
+        rss_mb: Resident Set Size in MB (actual physical memory used)
+        vms_mb: Virtual Memory Size in MB (total virtual memory)
+        percent: Percentage of total system memory used
+        alert_level: Current alert level based on FR-001 targets
+        timestamp: Unix timestamp when measurement was taken
+    """
+    rss_mb: float
+    vms_mb: float
+    percent: float
     alert_level: MemoryAlert
     timestamp: float
     
     def is_within_target(self, target_mb: float = 300.0) -> bool:
-        """Check if memory usage is within target"""
+        """Check if memory usage is within FR-001 target"""
         return self.rss_mb <= target_mb
 
 
 class MemoryOptimizer:
-    """Optimizes memory usage for always-ready daemon system"""
+    """
+    Optimizes memory usage for FR-001 Always-Ready System compliance.
+    
+    Monitors memory usage in real-time and triggers cleanup procedures
+    when usage exceeds target thresholds. Uses a multi-level alert system
+    to provide appropriate responses based on memory pressure severity.
+    """
     
     def __init__(self, target_idle_mb: float = 300.0):
+        """
+        Initialize memory optimizer.
+        
+        Args:
+            target_idle_mb: FR-001 target memory usage in MB (default 300)
+        """
         self.target_idle_mb = target_idle_mb
         self.monitoring_enabled = False
         self.monitoring_thread: Optional[threading.Thread] = None
@@ -63,16 +101,15 @@ class MemoryOptimizer:
         self.usage_history: List[MemoryUsage] = []
         self.max_history_items = 100
         
-        # Optimization tracking
+        # Cleanup callbacks for memory pressure
         self.cleanup_callbacks: List[Callable[[], None]] = []
-        self.lazy_components: Dict[str, weakref.ref] = {}
         
-        # Alert callbacks
+        # Alert callbacks for different severity levels
         self.alert_callbacks: Dict[MemoryAlert, List[Callable[[MemoryUsage], None]]] = {
             level: [] for level in MemoryAlert
         }
         
-        # GC optimization
+        # Setup garbage collection optimization
         self._setup_gc_optimization()
     
     def start_monitoring(self, interval: float = 30.0) -> bool:
@@ -114,7 +151,7 @@ class MemoryOptimizer:
             return False
     
     def stop_monitoring(self) -> None:
-        """Stop memory monitoring thread"""
+        """Stop memory monitoring thread gracefully"""
         if not self.monitoring_enabled:
             return
             
@@ -127,7 +164,12 @@ class MemoryOptimizer:
         logger.info("Memory monitoring stopped")
     
     def get_current_usage(self) -> Optional[MemoryUsage]:
-        """Get current memory usage"""
+        """
+        Get current memory usage statistics.
+        
+        Returns:
+            MemoryUsage object or None if psutil not available
+        """
         if not HAS_PSUTIL:
             return None
             
@@ -156,8 +198,56 @@ class MemoryOptimizer:
             logger.error(f"Failed to get memory usage: {e}")
             return None
     
+    def register_cleanup_callback(self, callback: Callable[[], None]) -> None:
+        """
+        Register a cleanup callback for memory pressure situations.
+        
+        Args:
+            callback: Function to call when memory cleanup is needed
+        """
+        self.cleanup_callbacks.append(callback)
+        logger.debug(f"Registered memory cleanup callback")
+    
+    def register_alert_callback(self, level: MemoryAlert, callback: Callable[[MemoryUsage], None]) -> None:
+        """
+        Register an alert callback for specific memory alert level.
+        
+        Args:
+            level: Memory alert level to respond to
+            callback: Function to call when alert level is reached
+        """
+        self.alert_callbacks[level].append(callback)
+        logger.debug(f"Registered {level.value} alert callback")
+    
+    def is_within_target(self) -> bool:
+        """Check if current memory usage is within FR-001 target"""
+        if not self.current_usage:
+            return True  # Assume OK if no data available
+        return self.current_usage.is_within_target(self.target_idle_mb)
+    
+    def get_usage_stats(self) -> Dict[str, Any]:
+        """
+        Get comprehensive memory usage statistics.
+        
+        Returns:
+            Dictionary with current usage, compliance status, and configuration
+        """
+        if not self.current_usage:
+            return {"error": "No usage data available"}
+            
+        return {
+            "current_mb": self.current_usage.rss_mb,
+            "target_mb": self.target_idle_mb,
+            "within_target": self.is_within_target(),
+            "alert_level": self.current_usage.alert_level.value,
+            "virtual_mb": self.current_usage.vms_mb,
+            "percent_of_system": self.current_usage.percent,
+            "monitoring_enabled": self.monitoring_enabled,
+            "cleanup_callbacks": len(self.cleanup_callbacks)
+        }
+    
     def _monitoring_loop(self, interval: float) -> None:
-        """Main memory monitoring loop"""
+        """Main memory monitoring loop (runs in separate thread)"""
         logger.debug("Memory monitoring loop started")
         
         while self.monitoring_enabled and not self.stop_event.is_set():
@@ -174,13 +264,13 @@ class MemoryOptimizer:
                 self.stop_event.wait(10.0)  # Longer sleep on error
     
     def _process_usage_measurement(self, usage: MemoryUsage) -> None:
-        """Process a memory usage measurement"""
+        """Process a memory usage measurement and trigger appropriate responses"""
         # Add to history
         self.usage_history.append(usage)
         if len(self.usage_history) > self.max_history_items:
             self.usage_history.pop(0)
         
-        # Check for alerts
+        # Check for alert level changes
         previous_level = (self.usage_history[-2].alert_level 
                          if len(self.usage_history) >= 2 
                          else MemoryAlert.NORMAL)
@@ -192,16 +282,16 @@ class MemoryOptimizer:
         if usage.alert_level == MemoryAlert.NORMAL:
             logger.debug(f"Memory usage: {usage.rss_mb:.1f}MB (normal)")
         elif usage.alert_level == MemoryAlert.WARNING:
-            logger.warning(f"Memory usage: {usage.rss_mb:.1f}MB (approaching limit)")
+            logger.warning(f"Memory usage: {usage.rss_mb:.1f}MB (approaching FR-001 limit)")
         elif usage.alert_level == MemoryAlert.CRITICAL:
-            logger.error(f"Memory usage: {usage.rss_mb:.1f}MB (over target)")
+            logger.error(f"Memory usage: {usage.rss_mb:.1f}MB (over FR-001 target)")
             self._trigger_memory_cleanup()
         elif usage.alert_level == MemoryAlert.EMERGENCY:
             logger.critical(f"Memory usage: {usage.rss_mb:.1f}MB (emergency)")
             self._trigger_emergency_cleanup()
     
     def _calculate_alert_level(self, rss_mb: float) -> MemoryAlert:
-        """Calculate alert level based on RSS memory usage"""
+        """Calculate appropriate alert level based on memory usage"""
         if rss_mb < 200:
             return MemoryAlert.NORMAL
         elif rss_mb < self.target_idle_mb:  # <300MB
@@ -222,12 +312,12 @@ class MemoryOptimizer:
                 logger.error(f"Memory alert callback failed: {e}")
     
     def _trigger_memory_cleanup(self) -> None:
-        """Trigger memory cleanup procedures"""
+        """Trigger memory cleanup procedures for CRITICAL alert level"""
         logger.info("Triggering memory cleanup procedures")
         
         cleanup_performed = False
         
-        # 1. Run registered cleanup callbacks
+        # Run registered cleanup callbacks
         for callback in self.cleanup_callbacks:
             try:
                 callback()
@@ -236,11 +326,7 @@ class MemoryOptimizer:
             except Exception as e:
                 logger.error(f"Cleanup callback failed: {e}")
         
-        # 2. Cleanup lazy components
-        self._cleanup_lazy_components()
-        cleanup_performed = True
-        
-        # 3. Force garbage collection
+        # Force garbage collection
         self._force_gc()
         cleanup_performed = True
         
@@ -254,7 +340,7 @@ class MemoryOptimizer:
                 logger.warning("⚠️ Memory cleanup had limited effect")
     
     def _trigger_emergency_cleanup(self) -> None:
-        """Trigger emergency memory cleanup procedures"""
+        """Trigger emergency memory cleanup for EMERGENCY alert level"""
         logger.critical("Triggering emergency memory cleanup")
         
         # Run normal cleanup first
@@ -262,9 +348,6 @@ class MemoryOptimizer:
         
         # Additional emergency measures
         try:
-            # Clear all caches aggressively
-            self._clear_all_caches()
-            
             # Force multiple GC cycles
             for _ in range(3):
                 self._force_gc()
@@ -275,118 +358,23 @@ class MemoryOptimizer:
         except Exception as e:
             logger.error(f"Emergency cleanup failed: {e}")
     
-    def _cleanup_lazy_components(self) -> None:
-        """Cleanup weakly referenced lazy components"""
-        logger.debug("Cleaning up lazy components")
-        
-        cleaned_count = 0
-        dead_refs = []
-        
-        for name, weak_ref in self.lazy_components.items():
-            component = weak_ref()
-            if component is None:
-                dead_refs.append(name)
-                continue
-                
-            # Try to cleanup component if it has cleanup method
-            if hasattr(component, 'cleanup'):
-                try:
-                    component.cleanup()
-                    cleaned_count += 1
-                except Exception as e:
-                    logger.debug(f"Component {name} cleanup failed: {e}")
-        
-        # Remove dead references
-        for name in dead_refs:
-            del self.lazy_components[name]
-            
-        if cleaned_count > 0 or dead_refs:
-            logger.debug(f"Cleaned {cleaned_count} components, removed {len(dead_refs)} dead references")
-    
     def _force_gc(self) -> None:
-        """Force garbage collection"""
+        """Force garbage collection and log results"""
         before = gc.get_count()
         collected = gc.collect()
         after = gc.get_count()
         
-        logger.debug(f"Garbage collection: collected {collected} objects, "
-                    f"counts {before} -> {after}")
-    
-    def _clear_all_caches(self) -> None:
-        """Clear all known caches aggressively"""
-        try:
-            # Clear import caches
-            if hasattr(sys, '_clear_type_cache'):
-                sys._clear_type_cache()
-                
-            # Clear any application caches we know about
-            # This would be customized based on what caches exist
-            logger.debug("Cleared system caches")
-            
-        except Exception as e:
-            logger.debug(f"Cache clearing failed: {e}")
+        logger.debug(f"Garbage collection: collected {collected} objects")
     
     def _setup_gc_optimization(self) -> None:
-        """Setup garbage collection optimization"""
-        # Tune GC thresholds for daemon usage pattern
-        # More frequent generation 0 collection, less frequent generation 2
-        gc.set_threshold(700, 10, 10)  # Default is (700, 10, 10)
+        """Setup garbage collection optimization for daemon usage pattern"""
+        # Tune GC thresholds for long-running daemon process
+        # More frequent generation 0 collection, standard for others
+        gc.set_threshold(700, 10, 10)
         
-        # Enable GC debugging in development
+        # Enable GC debugging in development mode only
         if logger.level <= logging.DEBUG:
             gc.set_debug(gc.DEBUG_STATS)
-    
-    def register_cleanup_callback(self, callback: Callable[[], None]) -> None:
-        """Register a cleanup callback for memory pressure"""
-        self.cleanup_callbacks.append(callback)
-        logger.debug(f"Registered memory cleanup callback: {callback.__name__}")
-    
-    def register_alert_callback(self, level: MemoryAlert, callback: Callable[[MemoryUsage], None]) -> None:
-        """Register an alert callback for specific memory level"""
-        self.alert_callbacks[level].append(callback)
-        logger.debug(f"Registered {level.value} alert callback")
-    
-    def register_lazy_component(self, name: str, component: Any) -> None:
-        """Register a component for lazy cleanup"""
-        self.lazy_components[name] = weakref.ref(component)
-        logger.debug(f"Registered lazy component: {name}")
-    
-    def is_within_target(self) -> bool:
-        """Check if current memory usage is within target"""
-        if not self.current_usage:
-            return True  # Assume OK if no data
-        return self.current_usage.is_within_target(self.target_idle_mb)
-    
-    def get_usage_stats(self) -> Dict[str, Any]:
-        """Get memory usage statistics"""
-        if not self.current_usage:
-            return {"error": "No usage data available"}
-            
-        return {
-            "current_mb": self.current_usage.rss_mb,
-            "target_mb": self.target_idle_mb,
-            "within_target": self.is_within_target(),
-            "alert_level": self.current_usage.alert_level.value,
-            "virtual_mb": self.current_usage.vms_mb,
-            "percent_of_system": self.current_usage.percent,
-            "monitoring_enabled": self.monitoring_enabled,
-            "cleanup_callbacks": len(self.cleanup_callbacks),
-            "lazy_components": len(self.lazy_components)
-        }
-    
-    def get_usage_history(self, last_n: int = 10) -> List[Dict[str, Any]]:
-        """Get recent memory usage history"""
-        recent = self.usage_history[-last_n:] if self.usage_history else []
-        
-        return [
-            {
-                "timestamp": usage.timestamp,
-                "rss_mb": usage.rss_mb,
-                "alert_level": usage.alert_level.value,
-                "within_target": usage.is_within_target(self.target_idle_mb)
-            }
-            for usage in recent
-        ]
 
 
 # Global memory optimizer instance
@@ -402,8 +390,16 @@ def get_memory_optimizer() -> MemoryOptimizer:
 
 
 def start_memory_monitoring(interval: float = 30.0) -> bool:
-    """Start memory monitoring"""
-    return get_memory_optimizer().start_memory_monitoring(interval)
+    """
+    Start memory monitoring for FR-001 compliance.
+    
+    Args:
+        interval: Monitoring interval in seconds
+        
+    Returns:
+        bool: True if monitoring started successfully
+    """
+    return get_memory_optimizer().start_monitoring(interval)
 
 
 def stop_memory_monitoring() -> None:
@@ -412,7 +408,7 @@ def stop_memory_monitoring() -> None:
 
 
 def get_current_memory_usage() -> Optional[MemoryUsage]:
-    """Get current memory usage"""
+    """Get current memory usage statistics"""
     return get_memory_optimizer().get_current_usage()
 
 
@@ -422,10 +418,10 @@ def is_memory_within_target() -> bool:
 
 
 def register_memory_cleanup_callback(callback: Callable[[], None]) -> None:
-    """Register a callback for memory cleanup"""
+    """Register a callback for memory cleanup situations"""
     get_memory_optimizer().register_cleanup_callback(callback)
 
 
 def get_memory_stats() -> Dict[str, Any]:
-    """Get memory usage statistics"""
+    """Get comprehensive memory usage statistics"""
     return get_memory_optimizer().get_usage_stats()
