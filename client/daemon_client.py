@@ -68,10 +68,18 @@ class DaemonClient:
 
     def __init__(self) -> None:
         self.connected: bool = False
-        self.transport = _StdioTransport()
+        self.transport = None
 
     async def connect(self, timeout: float = 0.8) -> None:
-        await asyncio.wait_for(self.transport.connect(), timeout=timeout)
+        # Try Named Pipes first
+        try:
+            from .transport.namedpipe_transport import NamedPipeTransport
+            self.transport = NamedPipeTransport()
+            await asyncio.wait_for(self.transport.connect(timeout=timeout), timeout=timeout)
+        except Exception:
+            # Fallback to STDIO
+            self.transport = _StdioTransport()
+            await asyncio.wait_for(self.transport.connect(), timeout=timeout)
         # Simple ping to validate
         resp = await self.transport.request("ping", {}, timeout=timeout)
         if "result" in resp and resp["result"].get("status") == "success":

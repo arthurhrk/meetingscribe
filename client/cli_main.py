@@ -43,6 +43,8 @@ def build_parser() -> argparse.ArgumentParser:
     export = sub.add_parser("export", help="Export transcription from audio file")
     export.add_argument("file", help="Path to audio file")
     export.add_argument("--format", default="txt", help="Format: txt|json|srt|vtt|xml|csv")
+    svc = sub.add_parser("service", help="Service utilities (status/repair/restart)")
+    svc.add_argument("action", choices=["status", "repair", "restart"], help="Action to perform")
     return parser
 
 
@@ -64,6 +66,8 @@ class DaemonExecutor:
             return await self._do_transcribe(args)
         if args.command == "export":
             return await self._do_export(args)
+        if args.command == "service":
+            return await self._do_service(args)
         self.ui.show_error("Unknown command")
         return 2
 
@@ -148,6 +152,18 @@ class DaemonExecutor:
         self.ui.show_success(f"Exported: {data.get('output')} ({data.get('format')})")
         return 0
 
+    async def _do_service(self, args) -> int:
+        # Minimal: query via daemon first; if fails, fallback to local helpers
+        action = args.action
+        if action == "status":
+            # If we're here, daemon is up. Report mode
+            self.ui.show_success("Daemon reachable (client is in daemon mode)")
+            return 0
+        if action in ("repair", "restart"):
+            self.ui.show_status("Restart not supported in stdio daemon stub", style="yellow")
+            return 0
+        return 2
+
 
 class FallbackExecutor:
     def __init__(self, runner: FallbackRunner, ui: RichUI) -> None:
@@ -167,6 +183,8 @@ class FallbackExecutor:
             return self._do_transcribe(args)
         if args.command == "export":
             return self._do_export(args)
+        if args.command == "service":
+            return self._do_service(args)
         self.ui.show_error("Unknown command")
         return 2
 
@@ -252,6 +270,27 @@ class FallbackExecutor:
         except Exception as e:
             self.ui.show_error(f"Export failed: {e}")
             return 2
+
+    def _do_service(self, args) -> int:
+        # Fallback: consult daemon/service helpers if available; else show guidance
+        try:
+            from daemon.service import service_status
+            st = service_status()
+            if args.action == "status":
+                self.ui.show_status(f"Windows Service: {st}")
+                return 0
+            elif args.action == "repair":
+                self.ui.show_status("If not installed, run service install as admin.", style="yellow")
+                return 0
+            elif args.action == "restart":
+                self.ui.show_status("Use Windows Services to restart, or 'sc stop/start MeetingScribe'", style="yellow")
+                return 0
+        except Exception:
+            if args.action == "status":
+                self.ui.show_status("Daemon (stdio) reachable? Try 'status' command.", style="yellow")
+                return 0
+            self.ui.show_status("Service utilities require admin and pywin32.", style="yellow")
+            return 0
 
 
 async def main() -> int:
