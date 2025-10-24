@@ -1,4 +1,4 @@
-﻿{
+{
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "meetingscribe",
   "title": "Meetingscribe",
@@ -49,7 +49,7 @@
       "keywords": [
         "recent",
         "recordings",
-        "histÃ³rico",
+        "historico",
         "arquivos"
       ]
     },
