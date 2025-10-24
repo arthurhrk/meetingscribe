@@ -3,7 +3,7 @@
   "name": "meetingscribe",
   "title": "Meetingscribe",
   "description": "An intelligent meeting transcription system with 100% local processing using AI.",
-  "icon": "assets/icon_meetingscribe.png",
+  "icon": "icon.png",
   "author": "Arthurhrk",
   "license": "MIT",
   "version": "1.0.0",
@@ -102,4 +102,5 @@
     "publish": "npx @raycast/api@latest publish"
   }
 }
+
 
