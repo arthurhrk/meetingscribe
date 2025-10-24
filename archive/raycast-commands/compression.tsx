@@ -220,7 +220,7 @@ ${Object.entries(algorithm_stats).map(([alg, stats]) => `
           <Action.Push 
             title="Compress File" 
             target={<FileCompressor />} 
-            icon={Icon.Archive} 
+            icon={Icon.Box} 
           />
           <Action.Push 
             title="Benchmark Algorithms" 
@@ -230,7 +230,7 @@ ${Object.entries(algorithm_stats).map(([alg, stats]) => `
           <Action.Push 
             title="Compression Insights" 
             target={<CompressionInsights />} 
-            icon={Icon.Lightbulb} 
+            icon={Icon.LightBulb} 
           />
           <Action.Push 
             title="Configuration" 
@@ -332,7 +332,7 @@ function FileAnalyzer() {
             <Action.Push 
               title="Compress This File" 
               target={<FileCompressor initialFile={file_info.path} initialAlgorithm={recommendation.algorithm} initialLevel={recommendation.level} />} 
-              icon={Icon.Archive} 
+              icon={Icon.Box} 
             />
           </ActionPanel>
         }
@@ -471,7 +471,7 @@ ${data.metadata_path ? `- **Metadata**: ${data.metadata_path}` : ''}
           <Action.SubmitForm 
             title="Compress File" 
             onSubmit={handleCompress}
-            icon={Icon.Archive}
+            icon={Icon.Box}
           />
         </ActionPanel>
       }

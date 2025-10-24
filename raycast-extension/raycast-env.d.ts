@@ -8,12 +8,10 @@
 /* eslint-disable @typescript-eslint/ban-types */
 
 type ExtensionPreferences = {
-  /** Python Path - Path to the MeetingScribe Python executable */
+  /** Python Path - Path to Python executable (e.g., python or ./venv/Scripts/python.exe) */
   "pythonPath": string,
   /** Project Path - Path to the MeetingScribe project directory */
-  "projectPath": string,
-  /** Default Whisper Model - Default Whisper model for transcriptions */
-  "defaultModel": "tiny" | "base" | "small" | "medium" | "large-v3"
+  "projectPath": string
 }
 
 /** Preferences accessible in all the extension's commands */
@@ -24,18 +22,8 @@ declare namespace Preferences {
   export type Record = ExtensionPreferences & {}
   /** Preferences accessible in the `recent` command */
   export type Recent = ExtensionPreferences & {}
-  /** Preferences accessible in the `transcribe` command */
-  export type Transcribe = ExtensionPreferences & {}
   /** Preferences accessible in the `status` command */
   export type Status = ExtensionPreferences & {}
-  /** Preferences accessible in the `export` command */
-  export type Export = ExtensionPreferences & {}
-  /** Preferences accessible in the `teams-monitor` command */
-  export type TeamsMonitor = ExtensionPreferences & {}
-  /** Preferences accessible in the `performance` command */
-  export type Performance = ExtensionPreferences & {}
-  /** Preferences accessible in the `profiling` command */
-  export type Profiling = ExtensionPreferences & {}
 }
 
 declare namespace Arguments {
@@ -43,17 +31,7 @@ declare namespace Arguments {
   export type Record = {}
   /** Arguments passed to the `recent` command */
   export type Recent = {}
-  /** Arguments passed to the `transcribe` command */
-  export type Transcribe = {}
   /** Arguments passed to the `status` command */
   export type Status = {}
-  /** Arguments passed to the `export` command */
-  export type Export = {}
-  /** Arguments passed to the `teams-monitor` command */
-  export type TeamsMonitor = {}
-  /** Arguments passed to the `performance` command */
-  export type Performance = {}
-  /** Arguments passed to the `profiling` command */
-  export type Profiling = {}
 }
 

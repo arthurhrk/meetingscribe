@@ -338,16 +338,18 @@ class AudioRecorder:
     def stop_recording(self) -> RecordingStats:
         """
         Para a gravação atual e salva o arquivo.
-        
+
         Returns:
             RecordingStats: Estatísticas da gravação
-            
+
         Raises:
             AudioRecorderError: Se não houver gravação em andamento ou erro ao salvar
         """
-        if not self._recording:
-            raise AudioRecorderError("Nenhuma gravação em andamento")
-        
+        # Verificar se há dados para salvar (ao invés de verificar _recording flag)
+        # Porque max_duration pode ter setado _recording = False mas ainda precisa salvar
+        if not self._frames and not self._stats:
+            raise AudioRecorderError("Nenhuma gravação para salvar")
+
         logger.info("Parando gravação...")
         
         # Parar gravação

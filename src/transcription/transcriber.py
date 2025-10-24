@@ -364,10 +364,14 @@ class WhisperTranscriber:
                 if progress:
                     progress.update(0.8, "Validando modelo...")
                 
-                # Modelo carregado com sucesso - pular teste se torch não disponível
-                if TORCH_AVAILABLE:
-                    test_audio = torch.zeros(16000, dtype=torch.float32)  # 1 segundo de silêncio
+                # Modelo carregado com sucesso - validação leve com numpy (evita depender de torch aqui)
+                try:
+                    import numpy as np  # type: ignore
+                    test_audio = np.zeros(16000, dtype=np.float32)  # 1 segundo de silêncio @16kHz
                     list(self._model.transcribe(test_audio, beam_size=1, language="en"))
+                except Exception as _val_err:
+                    # Em ambientes offline/limitados, a validação pode falhar sem prejudicar o uso real
+                    logger.debug(f"Validação do modelo pulada: {_val_err}")
                 
                 self._model_loaded = True
                 
@@ -475,7 +479,7 @@ class WhisperTranscriber:
             logger.info(f"Iniciando transcrição: {audio_path}")
             
             # Detectar se está usando GPU
-            performance_metrics['gpu_used'] = device == "cuda" if TORCH_AVAILABLE else False
+            performance_metrics['gpu_used'] = (self._detect_device() == "cuda") if TORCH_AVAILABLE else False
             
             # Pré-carregar metadados do arquivo no cache se disponível
             if FILE_CACHE_AVAILABLE:

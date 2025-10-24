@@ -58,7 +58,7 @@ ENV/
 env.bak/
 venv.bak/
 
-# MeetingScribe specific
+# MeetingScribe specific - Audio recordings
 *.wav
 *.mp3
 *.mp4
@@ -69,20 +69,16 @@ venv.bak/
 
 # Storage directories
 storage/recordings/*
-storage/transcriptions/*
-storage/exports/*
 !storage/recordings/.gitkeep
-!storage/transcriptions/.gitkeep
-!storage/exports/.gitkeep
-
-# Models directory
-models/*
-!models/.gitkeep
 
 # Logs
 logs/*.log
 logs/*.txt
 !logs/.gitkeep
+
+# Archive (keep structure but ignore details)
+archive/**/*.wav
+archive/**/*.log
 
 # OS specific
 .DS_Store

@@ -1,4 +1,4 @@
-import { Action, ActionPanel, Detail, Icon, List, showToast, Toast } from "@raycast/api";
+import { Action, ActionPanel, Detail, Icon, List, showToast, Toast, getPreferenceValues } from "@raycast/api";
 import { useEffect, useState } from "react";
 import { execSync } from "child_process";
 
@@ -79,6 +79,24 @@ function formatHealthColor(health: string): string {
   }
 }
 
+interface Preferences { pythonPath: string; projectPath: string; defaultModel: string }
+
+function runPerformance(command: string): any {
+  try {
+    const { pythonPath, projectPath } = getPreferenceValues<Preferences>();
+    const result = execSync(`${pythonPath} main.py --performance ${command}`, {
+      cwd: projectPath,
+      encoding: 'utf8',
+      timeout: 10000,
+      windowsHide: true,
+    });
+    return JSON.parse(result);
+  } catch (error) {
+    console.error('Performance command failed:', error);
+    throw new Error(`Failed to execute performance command: ${error}`);
+  }
+}
+
 export default function PerformanceDashboard() {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -89,7 +107,7 @@ export default function PerformanceDashboard() {
       setIsLoading(true);
       setError(null);
       
-      const data = executePerformanceCommand('dashboard');
+      const data = runPerformance('dashboard');
       
       if (data.status === 'error') {
         throw new Error(data.message || 'Unknown error occurred');

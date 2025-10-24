@@ -214,7 +214,7 @@ ${capabilities.buffer_strategies.map(strategy => `- **${strategy}**`).join('\n')
           <Action.Push 
             title="Streaming Insights" 
             target={<StreamingInsights />} 
-            icon={Icon.Lightbulb} 
+            icon={Icon.LightBulb} 
           />
           <Action.Push 
             title="Benchmark Strategies" 

@@ -1,28 +1,17 @@
 """Audio Processing and Device Management Module
 
-Provides intelligent audio device selection and processing capabilities.
+High-quality audio recording for Teams meetings using WASAPI.
+Provides device management and intelligent audio capture.
 """
 
-from .smart_selector import (
-    SmartDeviceSelector,
-    AudioContext,
-    DevicePriority,
-    DeviceScore,
-    DevicePreference,
-    get_smart_selector,
-    select_best_device,
-    record_device_success,
-    record_device_failure
-)
+from .recorder import AudioRecorder, RecordingConfig, AudioRecorderError
+from .devices import DeviceManager, AudioDevice, AudioDeviceError
 
 __all__ = [
-    "SmartDeviceSelector",
-    "AudioContext", 
-    "DevicePriority",
-    "DeviceScore",
-    "DevicePreference",
-    "get_smart_selector",
-    "select_best_device", 
-    "record_device_success",
-    "record_device_failure"
+    "AudioRecorder",
+    "RecordingConfig",
+    "AudioRecorderError",
+    "DeviceManager",
+    "AudioDevice",
+    "AudioDeviceError"
 ]

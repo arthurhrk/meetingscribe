@@ -73,6 +73,7 @@ def _handle(method: str, params: Dict[str, Any] | None) -> Dict[str, Any]:
         if method == "files.list":
             # params: type: recordings|transcriptions|exports, limit (opcional)
             from config import settings
+            from datetime import datetime
             from src.core.file_manager import list_transcriptions
             ftype = (params or {}).get("type", "transcriptions")
             limit = (params or {}).get("limit")

@@ -1,4 +1,4 @@
-import { Action, ActionPanel, Detail, Icon, List, showToast, Toast, Form, confirmAlert, Alert } from "@raycast/api";
+import { Action, ActionPanel, Detail, Icon, List, showToast, Toast, Form, confirmAlert, Alert, getPreferenceValues } from "@raycast/api";
 import { useEffect, useState } from "react";
 import { execSync } from "child_process";
 
@@ -47,6 +47,29 @@ interface CacheInsight {
   icon: string;
 }
 
+interface Preferences {
+  pythonPath: string;
+  projectPath: string;
+  defaultModel: string;
+}
+
+function runCacheCommand(command: string, args?: string): any {
+  try {
+    const { pythonPath, projectPath } = getPreferenceValues<Preferences>();
+    const argsStr = args ? ` ${args}` : '';
+    const result = execSync(`${pythonPath} main.py --cache ${command}${argsStr}`, {
+      cwd: projectPath,
+      encoding: 'utf8',
+      timeout: 15000,
+      windowsHide: true,
+    });
+    return JSON.parse(result);
+  } catch (error) {
+    console.error('Cache command failed:', error);
+    throw new Error(`Failed to execute cache command: ${error}`);
+  }
+}
+
 function executeCacheCommand(command: string, args?: string): any {
   try {
     const argsStr = args ? ` ${args}` : '';
@@ -83,7 +106,7 @@ export default function CacheManagement() {
       setIsLoading(true);
       setError(null);
       
-      const data = executeCacheCommand('status');
+      const data = runCacheCommand('status');
       
       if (data.status === 'error') {
         throw new Error(data.message || 'Unknown error occurred');
@@ -110,7 +133,7 @@ export default function CacheManagement() {
         title: "Optimizing cache..."
       });
 
-      const result = executeCacheCommand('optimize');
+      const result = runCacheCommand('optimize');
       
       if (result.status === 'success') {
         await showToast({
@@ -148,7 +171,7 @@ export default function CacheManagement() {
           title: "Clearing cache..."
         });
 
-        const result = executeCacheCommand('clear');
+        const result = runCacheCommand('clear');
         
         if (result.status === 'success') {
           await showToast({
@@ -249,7 +272,7 @@ export default function CacheManagement() {
           <Action.Push 
             title="Cache Insights" 
             target={<CacheInsights />} 
-            icon={Icon.Lightbulb} 
+            icon={Icon.LightBulb} 
           />
           <Action.Push 
             title="Preload Directory" 

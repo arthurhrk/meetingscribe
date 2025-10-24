@@ -1,142 +1,203 @@
 # MeetingScribe
 
-Transcrição de reuniões com IA 100% local (Windows), com foco em privacidade e experiência rápida. Estamos iniciando a migração para a arquitetura v2 (Client–Daemon), mantendo compatibilidade total com a v1.
+**High-quality audio recording for Teams meetings with instant Raycast access.**
 
-- Privacidade total: processamento local, sem rede
-- Raycast como launcher; CLI completa com Rich UI
-- Detecção inteligente do Teams e captura via WASAPI loopback
+Record Microsoft Teams meetings with professional-grade audio quality (48kHz, 16-bit) using WASAPI loopback capture. Launch recordings instantly via Raycast with a simple keyboard shortcut.
 
-## Índice
+## Features
 
-- Sobre o Projeto
-- Status do Projeto
-- Início Rápido (Windows)
-- Uso da CLI (v1)
-- Extensão Raycast
-- Configuração
-- Arquitetura
-- Roadmap v2
-- Troubleshooting
+- **Instant Recording**: Start recording with a single Raycast command
+- **High-Quality Audio**: WASAPI loopback capture at 48kHz for crystal-clear audio
+- **Smart Device Detection**: Automatically selects the best audio device
+- **Teams Integration**: Designed specifically for Microsoft Teams meetings
+- **100% Local**: All processing happens on your machine, no cloud services
 
-## Sobre o Projeto
+## Quick Start (Windows)
 
-O MeetingScribe oferece transcrição de alta qualidade usando Whisper (faster‑whisper) com captura de áudio profissional no Windows (WASAPI loopback). A v2 transforma o MeetingScribe em um “serviço sempre pronto” em segundo plano, com múltiplos clientes (Raycast e CLI) e fallback transparente quando o daemon não estiver disponível.
+### Prerequisites
+- Windows 10/11 (WASAPI support)
+- Python 3.10+
+- 4GB+ RAM recommended
+- Raycast for Windows (or macOS with Windows bridge)
 
-Principais capacidades (v1 já disponível):
-- Captura WASAPI loopback, seleção automática de dispositivos
-- Transcrição com múltiplos modelos Whisper (tiny → large‑v3)
-- Exportação em TXT/JSON/SRT/VTT/XML/CSV
-- Integração Raycast para acesso rápido
+### Installation
 
-Alvos da v2 (em andamento):
-- Serviço em background com modelos pré‑carregados (start < 3s)
-- Multi‑cliente (Raycast + CLI) com estado sincronizado
-- Detecção/automação para Microsoft Teams (gravar? transcrever?)
+1. **Clone and setup Python environment:**
+```bash
+git clone https://github.com/yourusername/meetingscribe.git
+cd meetingscribe
 
-## Status do Projeto
-
-- v1 (estável): CLI funcional em `main.py` e extensão Raycast atual
-- v2 (em migração): especificações e planos em `docs/v2-client-daemon/`
-  - Começando pela Fase 1 (refactor do CLI e “Status” unificado)
-
-Para visão completa: veja `docs/v2-client-daemon/architecture.md`, `client-interface.md`, `daemon-service.md`, `protocols.md`, `functional-requirements.md` e `use-cases.md`.
-
-## Início Rápido (Windows)
-
-Pré‑requisitos
-- Python 3.10+ recomendado
-- Windows 10/11 (WASAPI)
-- Recomendado: 8GB+ RAM (modelos médios/grandes)
-
-Instalação
-```
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
-pip install psutil wmi pywin32
+```
+
+2. **Test your setup:**
+```bash
 python system_check.py
 ```
 
-Teste rápido (v1)
+3. **Install Raycast Extension:**
+```bash
+cd raycast-extension
+npm install
+npm run dev
 ```
-python main.py
+
+4. **Configure Raycast:**
+   - Open Raycast preferences
+   - Find MeetingScribe extension
+   - Set `Project Path` to your MeetingScribe directory
+   - Set `Python Path` to `./venv/Scripts/python.exe` (or just `python`)
+
+## Usage
+
+### Via Raycast (Recommended)
+
+1. Open Raycast (⌘+Space or Alt+Space)
+2. Type "Start Recording"
+3. Select duration (30s, 1min, 5min, 10min, 30min)
+4. Recording starts automatically!
+
+Files are saved to: `storage/recordings/`
+
+### Via CLI
+
+```bash
+# Quick record for 30 seconds
+python -m src.cli.main record 30
+
+# Check system status
+python -m src.cli.main status
 ```
 
-## Uso da CLI (v1)
+## Project Structure
 
-Exemplos comuns:
-- Gravar do sistema (loopback automático) e salvar WAV:
-  `python main.py` → Menu → “Iniciar nova gravação”
-- Transcrever arquivo existente:
-  Menu → “Transcrição de Arquivos” → selecione o WAV
-- Exportar: escolha formatos (TXT/SRT/JSON/VTT/XML/CSV)
-- Dispositivos: listar e verificar WASAPI
+```
+meetingscribe/
+├── src/
+│   ├── audio/              # Audio recording engine
+│   │   ├── recorder.py     # Core AudioRecorder class
+│   │   └── devices.py      # Device detection and management
+│   ├── teams/              # Teams integration
+│   │   └── detector.py     # Teams process detection
+│   └── cli/                # Command-line interface
+│       └── main.py         # CLI entry point
+│
+├── raycast-extension/      # Raycast launcher
+│   └── src/
+│       ├── record.tsx      # Start recording command
+│       ├── recent.tsx      # View recent recordings
+│       └── status.tsx      # System status
+│
+├── storage/
+│   └── recordings/         # Audio files (WAV)
+│
+├── config.py               # Configuration
+├── system_check.py         # System diagnostics
+└── requirements.txt        # Python dependencies
+```
 
-Entrypoint principal: `main.py:1`
+## Configuration
 
-## Extensão Raycast
+Edit [config.py](config.py) to customize:
 
-Diretório: `raycast-extension/README.md:1`
-- `npm install`
-- Dev: `npx ray dev`
-- Build/Publish: `npx ray build`
+```python
+# Audio quality settings
+audio_sample_rate = 48000   # Hz (CD quality)
+audio_channels = 2          # Stereo
+audio_format = paInt16      # 16-bit depth
 
-Na v2, a extensão detectará o daemon e fará fallback para o STDIO atual quando necessário. Veja `docs/v2-client-daemon/raycast-integration.md:1`.
+# Storage locations
+recordings_dir = "storage/recordings"
+logs_dir = "logs"
+```
 
-## Configuração
+## Raycast Commands
 
-Config central: `config.py:1`
-- Diretórios: `storage/`, `models/`, `logs/`
-- Áudio: `audio_sample_rate`, `audio_channels`, `chunk_duration`
-- Whisper: `whisper_model`, `whisper_language`, `whisper_device`
-- Suporte a `.env`
+### 1. Start Recording
+Launch audio recording with selectable duration.
+- **Keywords**: record, gravação, audio, meeting
 
-Arquivo de exemplo: `config/meetingscribe_config.json:1` (opcional)
+### 2. Recent Recordings
+View and manage your recent recordings.
+- **Keywords**: recent, recordings, histórico
 
-Estrutura de armazenamento (padrão):
-- `storage/recordings/` — WAVs gravados
-- `storage/transcriptions/` — resultados
-- `storage/exports/` — arquivos exportados
-
-## Arquitetura
-
-v1 (atual):
-- CLI: `main.py:1`
-- Áudio: `device_manager.py:1`, `audio_recorder.py:1`
-- Transcrição: `src/transcription/`
-- Core/otimizações: `src/core/`
-
-v2 (em andamento):
-- Especificações completas: `docs/v2-client-daemon/README.md:1`
-- Componentes planejados:
-  - Daemon: serviço Windows, modelo pré‑carregado, multi‑cliente
-  - Client: CLI com Rich UI, detecção de daemon, fallback
-  - Protocolos: JSON‑RPC via Named Pipes (primário) e STDIO (legado)
-
-## Roadmap v2
-
-Fase 1 — CLI refactor (prioridade)
-- cli_main (assíncrono) com detecção de daemon e fallback
-- Rich UI extraída de `main.py`
-- Comando “Status” unificado (Ready, memória, modelos, dispositivos, fila)
-
-Fase 2 — Daemon core
-- Windows Service + lifecycle + resource manager (pré‑load)
-- stdio_core/connection manager + health monitor
-
-Fase 3 — Bridge + multi‑cliente
-- Named Pipes + eventos em tempo real + fallback STDIO
-
-Critérios de aceite por caso de uso: `docs/v2-client-daemon/acceptance-checklist.md:1`.
+### 3. System Status
+Check audio devices and system health.
+- **Keywords**: status, system, devices
 
 ## Troubleshooting
 
-- WASAPI não disponível: ver `device_manager.py:1` e `system_check.py:1`; instale `pyaudiowpatch` (preferível) ou use `pyaudio` com limitações.
-- Torch/pyannote pesados: usar CPU primeiro; GPU requer drivers atualizados.
-- Encoding no terminal: use UTF‑8 no Windows Terminal para evitar caracteres corrompidos.
-- Logs: `logs/meetingscribe.log`
+### No audio devices found
+- Run `python system_check.py` to diagnose
+- Ensure WASAPI is enabled (Windows Audio)
+- Try installing: `pip install pyaudiowpatch`
 
-## Licença
+### Recording file not created
+- Check `logs/meetingscribe.log` for errors
+- Verify `storage/recordings/` directory exists
+- Ensure sufficient disk space
 
-MIT — veja `LICENSE:1`.
+### Raycast can't find Python
+- Use full path: `C:\path\to\venv\Scripts\python.exe`
+- Or activate venv first: `venv\Scripts\activate`
 
+### Permission issues
+- Run as Administrator (once) to configure audio access
+- Check antivirus isn't blocking audio capture
+
+## Technical Details
+
+### Audio Capture
+- **Method**: WASAPI Loopback
+- **Quality**: 48kHz, 16-bit, Stereo
+- **Format**: WAV (uncompressed)
+- **Latency**: < 100ms
+
+### System Requirements
+- **CPU**: Any modern dual-core processor
+- **RAM**: 4GB minimum, 8GB recommended
+- **Storage**: ~10MB per minute of audio (stereo WAV)
+- **OS**: Windows 10 (1809+) or Windows 11
+
+## Development
+
+See [CLAUDE.md](CLAUDE.md) for development guidelines and architecture details.
+
+### Common commands:
+```bash
+# Install dev dependencies
+pip install -r requirements.txt
+
+# Run system check
+python system_check.py
+
+# Test recording (30 seconds)
+python -m src.cli.main record 30
+
+# Build Raycast extension
+cd raycast-extension && npm run build
+```
+
+## Archive
+
+Previous versions and experimental features are archived in:
+- `archive/scripts/` - Old recording implementations
+- `archive/v2-architecture/` - Client-daemon architecture experiments
+- `archive/docs/` - Historical troubleshooting documentation
+
+## License
+
+MIT License - see [LICENSE](LICENSE)
+
+## Contributing
+
+This is a focused tool for Teams recording. If you'd like to contribute:
+1. Keep it simple and focused on high-quality audio recording
+2. Maintain Windows WASAPI as the primary capture method
+3. Ensure Raycast integration remains smooth and fast
+
+---
+
+**Made with focus on quality and simplicity.**

@@ -1,4 +1,4 @@
-import { Action, ActionPanel, Detail, Icon, List, showToast, Toast } from "@raycast/api";
+import { Action, ActionPanel, Detail, Icon, List, showToast, Toast, getPreferenceValues } from "@raycast/api";
 import { useEffect, useState } from "react";
 import { execSync } from "child_process";
 
@@ -48,6 +48,25 @@ interface Insight {
   icon: string;
 }
 
+interface Preferences { pythonPath: string; projectPath: string; defaultModel: string }
+
+function runProfiling(command: string, limit?: number): any {
+  try {
+    const { pythonPath, projectPath } = getPreferenceValues<Preferences>();
+    const limitArg = limit ? `--profiling-limit ${limit}` : '';
+    const result = execSync(`${pythonPath} main.py --profiling ${command} ${limitArg}`.trim(), {
+      cwd: projectPath,
+      encoding: 'utf8',
+      timeout: 10000,
+      windowsHide: true,
+    });
+    return JSON.parse(result);
+  } catch (error) {
+    console.error('Profiling command failed:', error);
+    throw new Error(`Failed to execute profiling command: ${error}`);
+  }
+}
+
 function executeProfilingCommand(command: string, limit?: number): any {
   try {
     const limitArg = limit ? `--profiling-limit ${limit}` : '';
@@ -83,7 +102,7 @@ export default function ProfilingDashboard() {
       setIsLoading(true);
       setError(null);
       
-      const data = executeProfilingCommand('summary');
+      const data = runProfiling('summary');
       
       if (data.status === 'error') {
         throw new Error(data.message || 'Unknown error occurred');
@@ -199,7 +218,7 @@ function DetailedReports() {
   useEffect(() => {
     const loadReports = async () => {
       try {
-        const data = executeProfilingCommand('reports', 10);
+        const data = runProfiling('reports', 10);
         setReportsData(data.data);
       } catch (err) {
         console.error('Failed to load reports:', err);
@@ -248,7 +267,7 @@ function PerformanceInsights() {
   useEffect(() => {
     const loadInsights = async () => {
       try {
-        const data = executeProfilingCommand('insights');
+        const data = runProfiling('insights');
         setInsightsData(data.data);
       } catch (err) {
         console.error('Failed to load insights:', err);
@@ -293,7 +312,7 @@ function OptimizationSuggestions() {
   useEffect(() => {
     const loadSuggestions = async () => {
       try {
-        const data = executeProfilingCommand('suggestions');
+        const data = runProfiling('suggestions');
         setSuggestionsData(data.data);
       } catch (err) {
         console.error('Failed to load suggestions:', err);

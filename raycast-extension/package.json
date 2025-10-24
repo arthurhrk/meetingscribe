@@ -3,7 +3,7 @@
   "name": "meetingscribe",
   "title": "Meetingscribe",
   "description": "An intelligent meeting transcription system with 100% local processing using AI.",
-  "icon": "assets/icon.png",
+  "icon": "assets/icon_final.png",
   "author": "Arthurhrk",
   "license": "MIT",
   "version": "1.0.0",
@@ -16,46 +16,34 @@
       "name": "record",
       "title": "Start Recording",
       "subtitle": "MeetingScribe",
-      "description": "Starts a new audio recording",
+      "description": "Record Teams meeting audio with high quality",
       "mode": "view",
       "keywords": [
         "record",
         "gravação",
         "audio",
-        "meeting"
+        "meeting",
+        "teams"
       ]
     },
     {
       "name": "recent",
-      "title": "Recent Transcriptions",
+      "title": "Recent Recordings",
       "subtitle": "MeetingScribe",
-      "description": "Lists recent transcriptions with a preview",
+      "description": "View and manage recent recordings",
       "mode": "view",
       "keywords": [
         "recent",
-        "transcriptions",
+        "recordings",
         "histórico",
         "arquivos"
-      ]
-    },
-    {
-      "name": "transcribe",
-      "title": "Transcribe File",
-      "subtitle": "MeetingScribe",
-      "description": "Transcribes an existing audio file",
-      "mode": "view",
-      "keywords": [
-        "transcribe",
-        "arquivo",
-        "whisper",
-        "ai"
       ]
     },
     {
       "name": "status",
       "title": "System Status",
       "subtitle": "MeetingScribe",
-      "description": "Checks system and device status",
+      "description": "Check audio devices and system health",
       "mode": "view",
       "keywords": [
         "status",
@@ -63,117 +51,13 @@
         "devices",
         "health"
       ]
-    },
-    {
-      "name": "export",
-      "title": "Quick Export",
-      "subtitle": "MeetingScribe",
-      "description": "Quickly exports the last transcription",
-      "mode": "view",
-      "keywords": [
-        "export",
-        "exportar",
-        "txt",
-        "json"
-      ]
-    },
-    {
-      "name": "teams-monitor",
-      "title": "Teams Auto Monitor",
-      "subtitle": "MeetingScribe",
-      "description": "Monitors Microsoft Teams automatically and records meetings",
-      "mode": "view",
-      "keywords": [
-        "teams",
-        "auto",
-        "monitor",
-        "automatic",
-        "meeting"
-      ]
-    },
-    {
-      "name": "performance",
-      "title": "Performance Dashboard",
-      "subtitle": "MeetingScribe",
-      "description": "View detailed performance metrics and system status",
-      "mode": "view",
-      "keywords": [
-        "performance",
-        "metrics",
-        "dashboard",
-        "monitoring",
-        "cache",
-        "system"
-      ]
-    },
-    {
-      "name": "profiling",
-      "title": "Auto Profiling",
-      "subtitle": "MeetingScribe",
-      "description": "Automatic bottleneck detection and optimization suggestions",
-      "mode": "view",
-      "keywords": [
-        "profiling",
-        "bottlenecks",
-        "optimization",
-        "analysis",
-        "suggestions",
-        "insights"
-      ]
-    },
-    {
-      "name": "cache",
-      "title": "File Cache Manager",
-      "subtitle": "MeetingScribe",
-      "description": "Manage file cache and I/O optimization",
-      "mode": "view",
-      "keywords": [
-        "cache",
-        "files",
-        "optimization",
-        "memory",
-        "storage",
-        "performance"
-      ]
-    },
-    {
-      "name": "streaming",
-      "title": "Audio Streaming",
-      "subtitle": "MeetingScribe",
-      "description": "Advanced audio streaming for large files with intelligent optimization",
-      "mode": "view",
-      "keywords": [
-        "streaming",
-        "audio",
-        "large files",
-        "optimization",
-        "chunks",
-        "memory",
-        "performance"
-      ]
-    },
-    {
-      "name": "compression",
-      "title": "Intelligent Compression",
-      "subtitle": "MeetingScribe",
-      "description": "Smart file compression with adaptive algorithms and analysis",
-      "mode": "view",
-      "keywords": [
-        "compression",
-        "files",
-        "algorithms",
-        "optimization",
-        "space",
-        "storage",
-        "analysis"
-      ]
     }
   ],
   "preferences": [
     {
       "name": "pythonPath",
       "title": "Python Path",
-      "description": "Path to the MeetingScribe Python executable",
+      "description": "Path to Python executable (e.g., python or ./venv/Scripts/python.exe)",
       "type": "textfield",
       "default": "python",
       "required": false
@@ -185,36 +69,6 @@
       "type": "textfield",
       "default": "",
       "required": true
-    },
-    {
-      "name": "defaultModel",
-      "title": "Default Whisper Model",
-      "description": "Default Whisper model for transcriptions",
-      "type": "dropdown",
-      "default": "base",
-      "data": [
-        {
-          "title": "Tiny (Fastest)",
-          "value": "tiny"
-        },
-        {
-          "title": "Base (Balanced)",
-          "value": "base"
-        },
-        {
-          "title": "Small (Good accuracy)",
-          "value": "small"
-        },
-        {
-          "title": "Medium (High accuracy)",
-          "value": "medium"
-        },
-        {
-          "title": "Large-v3 (Maximum accuracy)",
-          "value": "large-v3"
-        }
-      ],
-      "required": false
     }
   ],
   "dependencies": {

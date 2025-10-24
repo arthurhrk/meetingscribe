@@ -1,17 +1,7 @@
-import {
-  ActionPanel,
-  Action,
-  List,
-  showToast,
-  Toast,
-  getPreferenceValues,
-  Detail,
-} from "@raycast/api";
-import { useState, useEffect } from "react";
-import { exec } from "child_process";
-import { promisify } from "util";
-
-const execAsync = promisify(exec);
+import { ActionPanel, Action, List, showToast, Toast, getPreferenceValues, Detail, Icon } from "@raycast/api";
+import { useState, useEffect, useRef } from "react";
+import { StdioClient } from "./stdio";
+import { getDaemonClient } from "./daemon-client";
 
 interface Preferences {
   pythonPath: string;
@@ -19,100 +9,84 @@ interface Preferences {
   defaultModel: string;
 }
 
-interface SystemStatus {
+interface SystemStatusData {
   overall: string;
-  components: {
-    name: string;
-    status: string;
-    message: string;
-    icon: string;
-  }[];
-  hardware: {
-    cpu: string;
-    memory: string;
-    gpu: string;
-    audio_devices: string;
-  };
-  models: {
-    name: string;
-    size: string;
-    status: string;
-  }[];
+  components: { name: string; status: string; message: string }[];
+  hardware: { cpu: string; memory: string; gpu: string; audio_devices: string };
+  models: { name: string; size: string; status: string }[];
 }
 
 export default function SystemStatus() {
-  const [status, setStatus] = useState<SystemStatus | null>(null);
+  const [status, setStatus] = useState<SystemStatusData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const preferences = getPreferenceValues<Preferences>();
+  const runnerMode = (preferences as any).runnerMode || "cli";
+  const clientRef = useRef<StdioClient | null>(null);
 
   useEffect(() => {
+    if (runnerMode === "stdio") {
+      clientRef.current = new StdioClient((preferences as any).pythonPath, (preferences as any).projectPath, undefined);
+      clientRef.current.start();
+    }
     loadSystemStatus();
+    return () => clientRef.current?.stop();
   }, []);
 
   async function loadSystemStatus() {
     try {
       setIsLoading(true);
-      
-      // Status simplificado para evitar problemas com system_check.py
-      const mockStatus = {
-        overall: "ok",
-        components: [
-          { name: "Python", status: "ok", message: "Sistema operacional", icon: "✅" },
-          { name: "Raycast Integration", status: "ok", message: "Comunicação ativa", icon: "✅" },
-          { name: "MeetingScribe", status: "ok", message: "Core system ready", icon: "✅" }
-        ],
-        hardware: {
-          cpu: "Sistema Windows",
-          memory: "Disponível", 
-          gpu: "Auto-detect",
-          audio_devices: "Detectados"
-        },
-        models: [
-          { name: "tiny", size: "39MB", status: "available" },
-          { name: "base", size: "74MB", status: "available" },
-          { name: "small", size: "244MB", status: "available" }
-        ]
+
+      const client = getDaemonClient();
+      await client.initialize();
+
+      const [sysResp, devices] = await Promise.all([client.getSystemStatus(), client.listAudioDevices()]);
+      const system = sysResp?.data?.system || {};
+
+      const hardware = {
+        cpu: system?.cpu?.model || system?.cpu || "-",
+        memory: system?.memory?.total || system?.memory || "-",
+        gpu: system?.gpu?.name || system?.gpu || "-",
+        audio_devices: String(devices.length || 0),
       };
-      
-      setStatus(mockStatus);
+
+      const isDaemonMode = client.isUsingDaemon();
+      const components = [
+        { name: "Connection", status: isDaemonMode ? "ok" : "ok", message: isDaemonMode ? "Daemon Mode (Fast)" : "Direct Mode (Fallback)" },
+        { name: "Core", status: "ok", message: "Sistema operacional" },
+        { name: "Raycast", status: "ok", message: "Bridge ativo" },
+        { name: "Audio", status: devices.length > 0 ? "ok" : "warning", message: `${devices.length} dispositivos` },
+      ];
+
+      const s: SystemStatusData = {
+        overall: "ok",
+        components,
+        hardware,
+        models: [
+          { name: "tiny", size: "~39MB", status: "available" },
+          { name: "base", size: "~74MB", status: "available" },
+        ],
+      };
+
+      setStatus(s);
     } catch (error) {
-      showToast({
-        style: Toast.Style.Failure,
-        title: "Erro ao verificar status",
-        message: "Não foi possível verificar o status do sistema",
-      });
+      showToast({ style: Toast.Style.Failure, title: "Erro ao verificar status", message: "Nao foi possivel verificar o status do sistema" });
     } finally {
       setIsLoading(false);
     }
   }
 
-  function getStatusIcon(status: string): string {
+  function getStatusIcon(status: string) {
     switch (status.toLowerCase()) {
       case "ok":
       case "success":
-        return "✅";
+        return Icon.CheckCircle;
       case "warning":
-        return "⚠️";
+        return Icon.ExclamationMark;
       case "error":
       case "failed":
-        return "❌";
+        return Icon.XMarkCircle;
       default:
-        return "ℹ️";
-    }
-  }
-
-  function getStatusColor(status: string): string {
-    switch (status.toLowerCase()) {
-      case "ok":
-      case "success":
-        return "#00AA00";
-      case "warning":
-        return "#FF8800";
-      case "error":
-      case "failed":
-        return "#FF0000";
-      default:
-        return "#0088FF";
+        return Icon.Dot;
     }
   }
 
@@ -122,22 +96,18 @@ export default function SystemStatus() {
 
   return (
     <List isLoading={isLoading}>
-      <List.Section
-        title={`Status Geral: ${getStatusIcon(status.overall)} ${status.overall}`}
-      >
+      <List.Section title={`Status Geral: ${status.overall}`}>
         <List.Item
           title="Hardware"
           subtitle={`CPU: ${status.hardware.cpu} | RAM: ${status.hardware.memory} | GPU: ${status.hardware.gpu}`}
-          accessories={[
-            { text: `${status.hardware.audio_devices} dispositivos de áudio` },
-          ]}
+          accessories={[{ text: `${status.hardware.audio_devices} dispositivos de audio` }]}
           actions={
             <ActionPanel>
               <Action.Push
                 title="Ver Detalhes Do Hardware"
                 target={
                   <Detail
-                    markdown={`# Hardware\n\n**CPU:** ${status.hardware.cpu}\n**Memória:** ${status.hardware.memory}\n**GPU:** ${status.hardware.gpu}\n**Dispositivos de Áudio:** ${status.hardware.audio_devices}`}
+                    markdown={`# Hardware\n\n**CPU:** ${status.hardware.cpu}\n**Memoria:** ${status.hardware.memory}\n**GPU:** ${status.hardware.gpu}\n**Dispositivos de audio:** ${status.hardware.audio_devices}`}
                   />
                 }
               />
@@ -152,50 +122,12 @@ export default function SystemStatus() {
             key={index}
             title={component.name}
             subtitle={component.message}
-            accessories={[
-              {
-                text: component.status,
-                tooltip: component.message,
-              },
-            ]}
-            icon={{
-              source: component.icon || getStatusIcon(component.status),
-              tintColor: getStatusColor(component.status),
-            }}
-            actions={
-              <ActionPanel>
-                <Action
-                  title="Atualizar Status"
-                  onAction={loadSystemStatus}
-                  shortcut={{ modifiers: ["cmd"], key: "r" }}
-                />
-              </ActionPanel>
-            }
-          />
-        ))}
-      </List.Section>
-
-      <List.Section title="Modelos Whisper">
-        {status.models.map((model, index) => (
-          <List.Item
-            key={index}
-            title={model.name}
-            subtitle={model.size}
-            accessories={[
-              {
-                text: model.status,
-                tooltip: `Status: ${model.status}`,
-              },
-            ]}
-            icon={getStatusIcon(model.status)}
-            actions={
-              <ActionPanel>
-                <Action title="Verificar Modelos" onAction={loadSystemStatus} />
-              </ActionPanel>
-            }
+            accessories={[{ text: component.status }]}
+            icon={getStatusIcon(component.status)}
           />
         ))}
       </List.Section>
     </List>
   );
 }
+

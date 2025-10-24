@@ -11,7 +11,27 @@
       "Bash(npx ray:*)",
       "WebFetch(domain:github.com)",
       "Bash(ffprobe:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(git add:*)",
+      "WebSearch",
+      "Bash(where python)",
+      "Bash(dir:*)",
+      "Bash(venvScriptspython.exe test:*)",
+      "Bash(./venv/Scripts/python.exe tests/test_daemon_integration.py)",
+      "Bash(./venv/Scripts/python.exe -c \"print(''Python environment test'')\")",
+      "Bash(npm run build:*)",
+      "Bash(.venvScriptspython.exe device_manager.py --list-json)",
+      "Bash(./venv/Scripts/python.exe device_manager.py --list-json)",
+      "Bash(timeout:*)",
+      "Bash(./venv/Scripts/python.exe quick_record.py:*)",
+      "Bash(cat:*)",
+      "Bash(./venv/Scripts/python.exe -c \"import sys; import json; print(json.dumps({''test'': ''ok''}), flush=True)\")",
+      "Bash(./venv/Scripts/python.exe -c \"from pathlib import Path; print(''ok'')\")",
+      "Bash(./venv/Scripts/python.exe test_simple.py)",
+      "Bash(./venv/Scripts/python.exe test_record_simple.py)",
+      "Bash(Select-String \"DEBUG:|ERROR:\")",
+      "Bash(Select-Object -First 5)",
+      "Bash(Select-Object -First 10)"
     ],
     "deny": []
   }

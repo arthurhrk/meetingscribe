@@ -1,58 +1,27 @@
-# MeetingScribe - Sistema de Transcrição IA
-# Dependências Python para funcionalidade completa
+# MeetingScribe - High-Quality Audio Recording
+# Core dependencies for Teams meeting recording
 
-# Interface e Configuração
-rich==14.1.0
+# Configuration and Logging
 loguru==0.7.3
 python-dotenv==1.1.1
 pydantic==2.11.7
 pydantic-settings==2.10.1
 
-# Hardware Detection
+# System Monitoring
 psutil==6.1.1
-py-cpuinfo==9.0.0
 
-# Processamento de Áudio
+# Audio Recording (WASAPI)
 pyaudiowpatch==0.2.12.7
 
-# Transcrição IA (OpenAI Whisper)
-faster-whisper==1.1.1
+# Windows Integration (Teams detection)
+wmi==1.5.1
+pywin32==306
 
-# Speaker Detection (IA para identificação de vozes)
-pyannote.audio==3.3.2
-
-# Dependências automáticas do faster-whisper:
-# - ctranslate2>=4.0,<5
-# - huggingface-hub>=0.13
-# - tokenizers>=0.13,<1
-# - onnxruntime>=1.14,<2
-# - av>=11
-
-# Dependências automáticas do pyannote.audio:
-# - torch>=2.0.0
-# - torchaudio>=2.2.0
-# - lightning>=2.0.1
-# - speechbrain>=1.0.0
-# - asteroid-filterbanks>=0.4
-# - pyannote.core>=5.0.0
-# - pyannote.database>=5.0.1
-# - pyannote.pipeline>=3.0.1
-
-# Extensão Raycast (separada)
-# A extensão Raycast está em raycast-extension/ e requer:
-# - Node.js 18+ para desenvolvimento
-# - Raycast instalado no sistema
-# - Dependências npm definidas em raycast-extension/package.json
-
-# API REST (futuro)
-# fastapi==0.104.1
-# uvicorn==0.24.0
-
-# Notas:
-# - PyTorch será instalado automaticamente pelo faster-whisper se necessário
-# - No Windows, WASAPI está disponível nativamente
-# - Para GPU, certifique-se de ter drivers CUDA instalados
-# - A extensão Raycast se comunica via CLI com argumentos JSON
-
-# Dependências de Teste
+# Development and Testing
 pytest==8.4.0
+
+# Notes:
+# - pyaudiowpatch provides WASAPI loopback support (Windows)
+# - No AI/ML dependencies (removed transcription features)
+# - Focused on high-quality audio recording only
+# - Raycast extension uses Node.js (see raycast-extension/package.json)

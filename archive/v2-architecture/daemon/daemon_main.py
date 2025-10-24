@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 try:
     from config import settings, setup_directories, setup_logging
     from daemon.stdio_core import run_stdio
+    from daemon.named_pipe_server import NamedPipeServer
     from src.teams import get_detector, start_teams_monitoring, stop_teams_monitoring
     from src.audio import get_smart_selector
     from daemon.fast_startup import execute_fast_startup, get_startup_metrics
@@ -30,12 +31,13 @@ try:
         register_memory_cleanup_callback
     )
     
-    # Optional advanced components (future enhancement)
+    # Optional advanced components (now available)
     try:
-        from daemon.resource_manager import ResourceManager
+        from daemon.resource_manager import ResourceManager, get_resource_manager
         HAS_RESOURCE_MANAGER = True
     except ImportError:
         ResourceManager = None
+        get_resource_manager = None
         HAS_RESOURCE_MANAGER = False
         
     try:
@@ -65,6 +67,7 @@ class DaemonMain:
         """Initialize daemon main process."""
         self.running = False
         self.stdio_thread: Optional[threading.Thread] = None
+        self.named_pipe_server: Optional[NamedPipeServer] = None
         self.teams_detector = None
         self.smart_selector = None
         
@@ -139,6 +142,9 @@ class DaemonMain:
             # Start STDIO server (cached from fast startup)
             self._start_stdio_server_optimized()
             
+            # Start Named Pipe server for client connections
+            self._start_named_pipe_server()
+            
             # Start Teams monitoring
             self._start_teams_monitoring()
             
@@ -185,12 +191,18 @@ class DaemonMain:
         """Initialize optional advanced components"""
         try:
             # Initialize resource manager if available
-            if HAS_RESOURCE_MANAGER and ResourceManager:
+            if HAS_RESOURCE_MANAGER and get_resource_manager:
                 logger.info("Initializing resource manager...")
-                self.resource_manager = ResourceManager()
-                # Note: ResourceManager.initialize() would be async, 
-                # for Phase 1.5 we skip advanced resource management
-                logger.info("Resource manager initialized")
+                self.resource_manager = get_resource_manager()
+                
+                # Preload base model for FR-001 fast startup
+                success = self.resource_manager.preload_base_model()
+                if success:
+                    logger.info("✅ Base model preloaded for fast startup")
+                else:
+                    logger.warning("⚠️ Base model preloading failed, startup may be slower")
+                    
+                logger.info("Resource manager initialized and running")
             else:
                 logger.info("Resource manager not available, skipping")
                 
@@ -219,6 +231,16 @@ class DaemonMain:
         self.stdio_thread = threading.Thread(target=stdio_worker, daemon=True)
         self.stdio_thread.start()
         logger.info("STDIO server thread started")
+    
+    def _start_named_pipe_server(self) -> None:
+        """Start Named Pipe server for client connections"""
+        try:
+            self.named_pipe_server = NamedPipeServer()
+            self.named_pipe_server.start()
+            logger.info("Named Pipe server started for client connections")
+        except Exception as e:
+            logger.warning(f"Named Pipe server failed to start: {e}")
+            # Continue without Named Pipe server (clients will fallback to STDIO)
     
     def _start_teams_monitoring(self) -> None:
         """Start Teams meeting detection monitoring"""
@@ -474,7 +496,8 @@ class DaemonMain:
             self.teams_detector is not None and
             self.smart_selector is not None and
             self.stdio_thread is not None and
-            self.stdio_thread.is_alive()
+            self.stdio_thread.is_alive() and
+            self.named_pipe_server is not None
         )
         logger.info(f"System Ready: {'✅' if components_ready else '❌'} (all critical components active)")
         
@@ -514,18 +537,22 @@ class DaemonMain:
             # Stop memory monitoring
             self.memory_optimizer.stop_monitoring()
             
+            # Stop Named Pipe server
+            if self.named_pipe_server:
+                self.named_pipe_server.stop()
+                
             # Stop Teams monitoring
             if self.teams_detector:
                 stop_teams_monitoring()
             
             # Advanced cleanup if available
-            if self.resource_manager and hasattr(self.resource_manager, 'cleanup'):
+            if self.resource_manager:
                 try:
-                    # For Phase 1.5, call synchronous cleanup if available
-                    if hasattr(self.resource_manager, 'sync_cleanup'):
-                        self.resource_manager.sync_cleanup()
+                    # Stop resource manager and cleanup models
+                    self.resource_manager.stop()
+                    logger.info("Resource manager stopped and models cleaned up")
                 except Exception as e:
-                    logger.debug(f"Advanced resource cleanup failed: {e}")
+                    logger.error(f"Resource manager cleanup failed: {e}")
             
             if self.health_monitor and hasattr(self.health_monitor, 'stop'):
                 try:

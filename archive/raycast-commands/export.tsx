@@ -8,9 +8,11 @@ import {
   getPreferenceValues,
   popToRoot,
 } from "@raycast/api";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { exec } from "child_process";
 import { promisify } from "util";
+import { StdioClient } from "./stdio";
+import { runCliJSON } from "./cli";
 
 const execAsync = promisify(exec);
 
@@ -44,35 +46,30 @@ export default function QuickExport() {
   const [showForm, setShowForm] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string>("");
   const preferences = getPreferenceValues<Preferences>();
+  const clientRef = useRef<StdioClient | null>(null);
+  const runnerMode = (preferences as any).runnerMode || "stdio";
 
   useEffect(() => {
+    if (runnerMode === "stdio") {
+      clientRef.current = new StdioClient(
+        preferences.pythonPath,
+        preferences.projectPath,
+        undefined
+      );
+      clientRef.current.start();
+    }
     loadTranscriptions();
+    return () => clientRef.current?.stop();
   }, []);
 
   async function loadTranscriptions() {
     try {
       setIsLoading(true);
-      const { stdout } = await execAsync(
-        `cd "${preferences.projectPath}" && ${preferences.pythonPath} main.py --list-transcriptions --json --limit 10`,
-      );
-
-      // Extrair JSON do stdout, ignorando logs coloridos
-      let jsonStr = stdout;
-      const lines = stdout.split('\n');
-      const jsonStartIndex = lines.findIndex(line => line.trim().startsWith('[') || line.trim().startsWith('{'));
-      
-      if (jsonStartIndex !== -1) {
-        jsonStr = lines.slice(jsonStartIndex).join('\n');
-        const jsonLines = jsonStr.split('\n');
-        const jsonEndIndex = jsonLines.findLastIndex(line => line.trim().endsWith(']') || line.trim().endsWith('}'));
-        
-        if (jsonEndIndex !== -1) {
-          jsonStr = jsonLines.slice(0, jsonEndIndex + 1).join('\n');
-        }
-      }
-
-      const data = JSON.parse(jsonStr);
-      setTranscriptions(data);
+      const resp: any = runnerMode === "stdio"
+        ? await clientRef.current?.request("files.list", { type: "transcriptions", limit: 20 })
+        : await runCliJSON(["-m", "src.core.runtime_cli", "files", "transcriptions", "--limit", "20"]);
+      const items = resp?.data?.items || [];
+      setTranscriptions(items);
     } catch (error) {
       showToast({
         style: Toast.Style.Failure,
@@ -92,9 +89,12 @@ export default function QuickExport() {
         message: `${filename} → ${format.toUpperCase()}`,
       });
 
-      await execAsync(
-        `cd "${preferences.projectPath}" && ${preferences.pythonPath} main.py --export "${filename}" --format ${format}`,
-      );
+      const res: any = runnerMode === "stdio"
+        ? await clientRef.current?.request("export.run", { filename, format })
+        : await runCliJSON(["-m", "src.core.runtime_cli", "export", filename, "--format", format]);
+      if (res?.status !== "success") {
+        throw new Error(res?.error?.message || "Falha na exportação");
+      }
 
       showToast({
         style: Toast.Style.Success,

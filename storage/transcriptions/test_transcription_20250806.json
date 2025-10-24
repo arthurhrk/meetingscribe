@@ -1,0 +1,40 @@
+{
+  "filename": "test_transcription_20250806",
+  "created": "2025-08-06T21:52:00.000000",
+  "duration": 30.5,
+  "language": "pt",
+  "model": "base",
+  "text": "Esta é uma transcrição de teste para verificar se o sistema MeetingScribe está funcionando corretamente. O áudio foi processado com sucesso usando o modelo Whisper base.",
+  "segments": [
+    {
+      "id": 1,
+      "start": 0.0,
+      "end": 5.2,
+      "text": "Esta é uma transcrição de teste para verificar",
+      "confidence": 0.95
+    },
+    {
+      "id": 2,
+      "start": 5.2,
+      "end": 12.8,
+      "text": "se o sistema MeetingScribe está funcionando corretamente.",
+      "confidence": 0.92
+    },
+    {
+      "id": 3,
+      "start": 12.8,
+      "end": 30.5,
+      "text": "O áudio foi processado com sucesso usando o modelo Whisper base.",
+      "confidence": 0.98
+    }
+  ],
+  "metadata": {
+    "audio_file": "meeting_recording_20250806_test.wav",
+    "sample_rate": 48000,
+    "channels": 2,
+    "processing_time": 8.2,
+    "model_size": "base",
+    "compute_type": "float32",
+    "device": "cpu"
+  }
+}

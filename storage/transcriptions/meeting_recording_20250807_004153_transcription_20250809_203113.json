@@ -1,0 +1,16 @@
+{
+  "metadata": {
+    "exported_at": "2025-08-09T20:31:13.789206",
+    "language": "en",
+    "model_size": "tiny",
+    "duration": 0.0,
+    "word_count": 0,
+    "confidence_avg": 0.0,
+    "processing_time": 1.7884938716888428,
+    "segment_count": 0
+  },
+  "transcription": {
+    "full_text": "",
+    "segments": []
+  }
+}

@@ -8,44 +8,43 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Settings(BaseSettings):
+    """MeetingScribe Configuration - Audio Recording Focus"""
+
     app_name: str = "MeetingScribe"
-    app_version: str = "1.0.0"
+    app_version: str = "2.0.0"
     debug: bool = True
-    log_level: str = "DEBUG"
-    
+    log_level: str = "INFO"
+
+    # Directory structure
     base_dir: Path = Path(__file__).parent
     storage_dir: Path = base_dir / "storage"
-    models_dir: Path = base_dir / "models"
     logs_dir: Path = base_dir / "logs"
     recordings_dir: Path = storage_dir / "recordings"
-    transcriptions_dir: Path = storage_dir / "transcriptions"
-    exports_dir: Path = storage_dir / "exports"
-    
-    audio_sample_rate: int = 16000
-    audio_channels: int = 1
-    chunk_duration: int = 30
-    
-    whisper_model: str = "base"
-    whisper_language: str = "pt"
-    whisper_device: str = "auto"
-    
+
+    # Audio recording settings (high-quality for Teams)
+    audio_sample_rate: int = 48000  # 48kHz - professional quality
+    audio_channels: int = 2         # Stereo
+    chunk_duration: int = 30        # Recording chunk size in seconds
+
+    # Recording defaults
+    default_recording_duration: int = 300  # 5 minutes default
+    max_recording_duration: int = 7200     # 2 hours max
+
     model_config = {"env_file": ".env", "case_sensitive": False}
 
 def setup_directories():
+    """Create required directories for MeetingScribe"""
     settings = Settings()
-    
+
     directories = [
         settings.storage_dir,
-        settings.models_dir,
         settings.logs_dir,
-        settings.recordings_dir,
-        settings.transcriptions_dir,
-        settings.exports_dir
+        settings.recordings_dir
     ]
-    
+
     for directory in directories:
         directory.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Diretório criado/verificado: {directory}")
+        logger.debug(f"Directory ready: {directory}")
 
 def setup_logging():
     settings = Settings()
