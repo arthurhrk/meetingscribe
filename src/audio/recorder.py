@@ -33,11 +33,72 @@ except ImportError:
         logger.error("PyAudio não disponível")
 
 
+# Recording Quality Presets
+class RecordingQuality:
+    """Predefined recording quality presets"""
+
+    # Quick/Draft quality - smaller files, lower quality
+    QUICK = {
+        'sample_rate': 16000,
+        'channels': 1,
+        'chunk_size': 2048,
+        'name': 'Quick (16kHz Mono)',
+        'description': 'Smaller files, good for voice notes',
+        'size_per_min': '2 MB/min'
+    }
+
+    # Standard quality - balanced
+    STANDARD = {
+        'sample_rate': 44100,
+        'channels': 2,
+        'chunk_size': 4096,
+        'name': 'Standard (44.1kHz Stereo)',
+        'description': 'CD quality, balanced file size',
+        'size_per_min': '10 MB/min'
+    }
+
+    # Professional quality - high quality for Teams meetings
+    PROFESSIONAL = {
+        'sample_rate': 48000,
+        'channels': 2,
+        'chunk_size': 4096,
+        'name': 'Professional (48kHz Stereo)',
+        'description': 'Professional quality for meetings',
+        'size_per_min': '11 MB/min'
+    }
+
+    # High quality - maximum quality
+    HIGH = {
+        'sample_rate': 96000,
+        'channels': 2,
+        'chunk_size': 8192,
+        'name': 'High (96kHz Stereo)',
+        'description': 'Maximum quality, larger files',
+        'size_per_min': '22 MB/min'
+    }
+
+    @classmethod
+    def get_all(cls) -> Dict[str, Dict]:
+        """Get all quality presets"""
+        return {
+            'quick': cls.QUICK,
+            'standard': cls.STANDARD,
+            'professional': cls.PROFESSIONAL,
+            'high': cls.HIGH
+        }
+
+    @classmethod
+    def get(cls, quality_name: str) -> Dict:
+        """Get specific quality preset by name"""
+        qualities = cls.get_all()
+        return qualities.get(quality_name.lower(), cls.PROFESSIONAL)
+
+
 @dataclass
 class RecordingConfig:
     """
     Configuração para gravação de áudio.
-    
+
     Attributes:
         device: Dispositivo de áudio para gravação
         sample_rate: Taxa de amostragem em Hz
@@ -48,9 +109,9 @@ class RecordingConfig:
         output_dir: Diretório para salvar gravações
     """
     device: AudioDevice
-    sample_rate: int = 16000
-    channels: int = 1
-    chunk_size: int = 1024
+    sample_rate: int = 48000  # Professional quality
+    channels: int = 2         # Stereo
+    chunk_size: int = 4096    # Larger buffer for smoother recording
     format: int = pyaudio.paInt16 if PYAUDIO_AVAILABLE else None
     max_duration: Optional[int] = None
     output_dir: Path = field(default_factory=lambda: Path("storage/recordings"))

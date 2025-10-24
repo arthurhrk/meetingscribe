@@ -20,7 +20,7 @@ interface Preferences {
   runnerMode?: string;
 }
 
-interface AudioDevice {
+interfacaudioDevice {
   id: string;
   name: string;
   isDefault: boolean;
@@ -32,7 +32,7 @@ interface AudioDevice {
 const activeRecordings = new Map<string, any>();
 
 export default function StartRecording() {
-  const [devices, setDevices] = useState<AudioDevice[]>([]);
+  const [devices, setDevices] = useStataudioDevice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -52,7 +52,7 @@ export default function StartRecording() {
     setIsLoading(false);
   }, []);
 
-  async function startRecording(deviceName: string, duration: number = 30) {
+  async function startRecording(deviceName: string, Duracaon: number = 30) {
     if (isRecording) {
       await showToast({ style: Toast.Style.Failure, title: "JÃ¡ estÃ¡ gravando", message: "Aguarde terminar" });
       return;
@@ -61,8 +61,8 @@ export default function StartRecording() {
     try {
       setIsRecording(true);
 
-      const minutes = duration >= 60 ? Math.floor(duration / 60) : 0;
-      const seconds = duration % 60;
+      const minutes = Duracaon >= 60 ? Math.floor(Duracaon / 60) : 0;
+      const seconds = Duracaon % 60;
       const timeDisplay = minutes > 0 ? `${minutes}min${seconds > 0 ? ` ${seconds}s` : ""}` : `${seconds}s`;
 
       await showToast({ style: Toast.Style.Animated, title: "Iniciando gravaÃ§Ã£o", message: `DuraÃ§Ã£o: ${timeDisplay}` });
@@ -89,8 +89,8 @@ export default function StartRecording() {
         } else {
           await showToast({
             style: Toast.Style.Failure,
-            title: "Script nÃ£o encontrado",
-            message: `quick_record.py nÃ£o estÃ¡ em ${projectPath}`,
+            title: "Script nao encontrado",
+            message: `quick_record.py nao esta¡ em ${projectPath}`,
           });
           setIsRecording(false);
           return;
@@ -98,11 +98,11 @@ export default function StartRecording() {
       }
 
       const response = await new Promise<any>((resolve, reject) => {
-        const child = spawn(pythonPath, [scriptPath, duration.toString(), '--input', (inputMode || 'auto')], {
+        const child = spawn(pythonPath, [scriptPath, Duracaon.toString(), '--input', (inputMode || 'auto')], {
           cwd: projectPath,
           windowsHide: true,
           detached: false,
-          stdio: ["ignore", "pipe", "pipe"],
+        audio: ["ignore", "pipe", "pipe"],
         });
 
         let jsonReceived = false;
@@ -161,7 +161,7 @@ export default function StartRecording() {
 
         await showToast({ style: Toast.Style.Success, title: "GravaÃ§Ã£o iniciada", message: `${timeDisplay} - ${filename}` });
 
-        // Post-check: verify file creation after expected duration
+        // Post-check: verify file creation after expected Duracaon
         const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(projectPath, filePath);
         setTimeout(() => {
           try {
@@ -171,13 +171,13 @@ export default function StartRecording() {
               showToast({
                 style: Toast.Style.Failure,
                 title: "Falha ao salvar",
-                message: `NÃ£o encontrei ${filename}. Dica: toque algum Ã¡udio do sistema ou tente novamente.`,
+                message: `Nao encontrei ${filename}. Dica: toque algumaudio do sistema ou tente novamente.`,
               });
             }
           } catch {
             // ignore post-check errors
           }
-        }, (duration + 4) * 1000);
+        }, (Duracaon + 4) * 1000);
       } else {
         throw new Error(response.error?.message || "Failed to start recording");
       }
@@ -187,7 +187,7 @@ export default function StartRecording() {
       await showToast({
         style: Toast.Style.Failure,
         title: "Erro ao iniciar",
-        message: isTimeout ? "Timeout - verifique Python e dependÃªncias" : errorMsg.substring(0, 100),
+        message: isTimeout ? "Timeout - verifique Python e dependencias" : errorMsg.substring(0, 100),
       });
     } finally {
       setIsRecording(false);
@@ -197,20 +197,21 @@ export default function StartRecording() {
   if (error) {
     return (
       <Detail
-        markdown={`# Erro ao carregar\n\n${error}\n\nVerifique:\n- Python configurado\n- Caminho do projeto correto\n- DependÃªncias instaladas`}
+        markdown={`# Erro ao carregar\n\n${error}\n\nVerifique:\n- Python configurado\n- Caminho do projeto correto\n- dependencias instaladas`}
       />
     );
   }
 
   return (
-    <List isLoading={isLoading} searchBarPlaceholder="Escolha a duraÃ§Ã£o da gravaÃ§Ã£o...">
-      <List.Section title="DuraÃ§Ã£o da GravaÃ§Ã£o">
+    <List isLoading={isLoading} searchBarPlaceholder="Escolha a duracao da gravacao...">
+      <List.Section title="Duracao da Gravacao">
         {devices.map((device) => (
           <List.Item
             key={device.id}
             title={isRecording ? "Gravando..." : device.name}
             subtitle={isRecording ? "Aguarde terminar" : "Selecione o tempo desejado"}
             icon={isRecording ? Icon.CircleFilled : Icon.Microphone}
+            accessories={[{ text: `Entrada: ${inputMode}` }]}
             actions={
               <ActionPanel>
                 <Action title="Gravar 30s" onAction={() => startRecording(device.name, 30)} icon={Icon.Circle} />
@@ -231,21 +232,23 @@ export default function StartRecording() {
         ))}
       </List.Section>
 
-      <List.Section title="InformaÃ§Ãµes">
+      <List.Section title="Informacoes">
         <List.Item
           icon={Icon.Info}
           title="Como funciona"
-          subtitle="Auto-detecta o melhor dispositivo de Ã¡udio disponÃ­vel"
+          subtitle="Auto-detecta o melhor dispositivo audio disponivel"
         />
         <List.Item
           icon={Icon.Gear}
-          title="ConfiguraÃ§Ãµes"
-          subtitle="Defina Python e o caminho do projeto nas preferÃªncias"
+          title="Configuracoes"
+          subtitle="Defina Python e o caminho do projeto nas preferencias"
         />
       </List.Section>
     </List>
   );
 }
+
+
 
 
 
