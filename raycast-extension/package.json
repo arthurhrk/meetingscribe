@@ -1,106 +1,153 @@
-{
-  "$schema": "https://www.raycast.com/schemas/extension.json",
-  "name": "meetingscribe",
-  "title": "Meetingscribe",
-  "description": "An intelligent meeting transcription system with 100% local processing using AI.",
-  "icon": "icon.png",
-  "author": "Arthurhrk",
-  "license": "MIT",
-  "version": "1.0.0",
-  "categories": [
-    "Productivity",
-    "Media"
-  ],
-  "commands": [
-    {
-      "name": "record",
-      "title": "Start Recording",
-      "subtitle": "MeetingScribe",
-      "description": "Record Teams meeting audio with high quality",
-      "mode": "view",
-      "keywords": [
-        "record",
-        "gravaÃ§Ã£o",
-        "audio",
-        "meeting",
-        "teams"
-      ]
-    },
-    {
-      "name": "recording-status",
-      "title": "Recording Status",
-      "subtitle": "MeetingScribe",
-      "description": "Monitor active recordings in real-time",
-      "mode": "view",
-      "keywords": [
-        "recording",
-        "status",
-        "monitor",
-        "active",
-        "progress"
-      ]
-    },
-    {
-      "name": "recent",
-      "title": "Recent Recordings",
-      "subtitle": "MeetingScribe",
-      "description": "View and manage recent recordings",
-      "mode": "view",
-      "keywords": [
-        "recent",
-        "recordings",
-        "historico",
-        "arquivos"
-      ]
-    },
-    {
-      "name": "status",
-      "title": "System Status",
-      "subtitle": "MeetingScribe",
-      "description": "Check audio devices and system health",
-      "mode": "view",
-      "keywords": [
-        "status",
-        "system",
-        "devices",
-        "health"
-      ]
-    }
-  ],
-  "preferences": [
-    {
-      "name": "pythonPath",
-      "title": "Python Path",
-      "description": "Path to Python executable (e.g., python or ./venv/Scripts/python.exe)",
-      "type": "textfield",
-      "default": "python",
-      "required": false
-    },
-    {
-      "name": "projectPath",
-      "title": "Project Path",
-      "description": "Path to the MeetingScribe project directory",
-      "type": "textfield",
-      "default": "",
-      "required": true
-    }
-  ],
-  "dependencies": {
-    "@raycast/api": "^1.78.0"
-  },
-  "devDependencies": {
-    "@raycast/eslint-config": "^1.0.6",
-    "eslint": "^8.51.0",
-    "prettier": "^3.0.3",
-    "typescript": "^5.2.2"
-  },
-  "scripts": {
-    "build": "ray build -e dist",
-    "dev": "ray develop",
-    "fix-lint": "ray lint --fix",
-    "lint": "ray lint",
-    "publish": "npx @raycast/api@latest publish"
-  }
+﻿{
+    "$schema":  "https://www.raycast.com/schemas/extension.json",
+    "name":  "meetingscribe",
+    "title":  "Meetingscribe",
+    "description":  "An intelligent meeting transcription system with 100% local processing using AI.",
+    "icon":  "icon.png",
+    "author":  "Arthurhrk",
+    "license":  "MIT",
+    "version":  "1.0.0",
+    "categories":  [
+                       "Productivity",
+                       "Media"
+                   ],
+    "commands":  [
+                     {
+                         "name":  "record",
+                         "title":  "Start Recording",
+                         "subtitle":  "MeetingScribe",
+                         "description":  "Record Teams meeting audio with high quality",
+                         "mode":  "view",
+                         "keywords":  [
+                                          "record",
+                                          "gravacao",
+                                          "audio",
+                                          "meeting",
+                                          "teams"
+                                      ]
+                     },
+                     {
+                         "name":  "recording-status",
+                         "title":  "Recording Status",
+                         "subtitle":  "MeetingScribe",
+                         "description":  "Monitor active recordings in real-time",
+                         "mode":  "view",
+                         "keywords":  [
+                                          "recording",
+                                          "status",
+                                          "monitor",
+                                          "active",
+                                          "progress"
+                                      ]
+                     },
+                     {
+                         "name":  "recent",
+                         "title":  "Recent Recordings",
+                         "subtitle":  "MeetingScribe",
+                         "description":  "View and manage recent recordings",
+                         "mode":  "view",
+                         "keywords":  [
+                                          "recent",
+                                          "recordings",
+                                          "historico",
+                                          "arquivos"
+                                      ]
+                     },
+                     {
+                         "name":  "transcript-status",
+                         "title":  "Transcript Status",
+                         "subtitle":  "MeetingScribe",
+                         "description":  "Monitor active transcriptions and view results",
+                         "mode":  "view",
+                         "keywords":  [
+                                          "transcript",
+                                          "transcription",
+                                          "status",
+                                          "transcricao",
+                                          "gemini"
+                                      ]
+                     },
+                     {
+                         "name":  "status",
+                         "title":  "System Status",
+                         "subtitle":  "MeetingScribe",
+                         "description":  "Check audio devices and system health",
+                         "mode":  "view",
+                         "keywords":  [
+                                          "status",
+                                          "system",
+                                          "devices",
+                                          "health"
+                                      ]
+                     }
+                 ],
+    "preferences":  [
+                        {
+                            "name":  "pythonPath",
+                            "title":  "Python Path",
+                            "description":  "Path to Python executable (e.g., python or ./venv/Scripts/python.exe)",
+                            "type":  "textfield",
+                            "default":  "python",
+                            "required":  false
+                        },
+                        {
+                            "name":  "projectPath",
+                            "title":  "Project Path",
+                            "description":  "Path to the MeetingScribe project directory",
+                            "type":  "textfield",
+                            "default":  "",
+                            "required":  true
+                        },
+                        {
+                            "name":  "geminiApiKey",
+                            "title":  "Google Gemini API Key",
+                            "description":  "API key for Google Gemini transcription service (get it from https://makersuite.google.com/app/apikey)",
+                            "type":  "password",
+                            "default":  "",
+                            "required":  false
+                        },
+                        {
+                            "name":  "geminiModel",
+                            "title":  "Gemini Model",
+                            "description":  "Choose which Gemini model to use for transcription",
+                            "type":  "dropdown",
+                            "default":  "models/gemini-2.0-flash-exp",
+                            "required":  false,
+                            "data":  [
+                                         {
+                                             "title":  "Gemini 2.0 Flash (Faster, Cheaper)",
+                                             "value":  "models/gemini-2.0-flash-exp"
+                                         },
+                                         {
+                                             "title":  "Gemini 1.5 Pro (More Accurate)",
+                                             "value":  "models/gemini-1.5-pro"
+                                         }
+                                     ]
+                        },
+                        {
+                            "name":  "optimizeAudio",
+                            "title":  "Optimize Audio Before Upload",
+                            "description":  "Reduce audio file size before uploading (converts to 16kHz mono WAV). Requires ffmpeg for non-WAV files.",
+                            "type":  "checkbox",
+                            "default":  false,
+                            "required":  false,
+                            "label":  "Enable Audio Optimization"
+                        }
+                    ],
+    "dependencies":  {
+                         "@raycast/api":  "^1.78.0"
+                     },
+    "devDependencies":  {
+                            "@raycast/eslint-config":  "^1.0.6",
+                            "eslint":  "^8.51.0",
+                            "prettier":  "^3.0.3",
+                            "typescript":  "^5.2.2"
+                        },
+    "scripts":  {
+                    "build":  "ray build -e dist",
+                    "dev":  "ray develop",
+                    "fix-lint":  "ray lint --fix",
+                    "lint":  "ray lint",
+                    "publish":  "npx @raycast/api@latest publish"
+                }
 }
-
-

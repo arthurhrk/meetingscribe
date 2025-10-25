@@ -1,43 +1,121 @@
 # MeetingScribe
 
-**High-quality audio recording for Teams meetings with instant Raycast access.**
+Local-first audio recording + transcription helper with a Raycast extension. This repo is organized to make it easy to install and to use only what is needed by the Raycast commands.
 
-Record Microsoft Teams meetings with professional-grade audio quality (48kHz, 16-bit) using WASAPI loopback capture. Launch recordings instantly via Raycast with a simple keyboard shortcut.
+The Raycast extension focuses on these functions:
+- Start Recording (system loopback or microphone)
+- Recording Status (quick sanity and tips)
+- Recent Recordings (open/export items)
+- Import Google (helper script you can run from the repo)
+- Transcript Status (basic visibility of files present)
 
-## Features
+If you just want to use the Raycast commands, you only need Python + a few dependencies and to point the extension to this repo folder.
 
-- **Instant Recording**: Start recording with a single Raycast command
-- **High-Quality Audio**: WASAPI loopback capture at 48kHz for crystal-clear audio
-- **Smart Device Detection**: Automatically selects the best audio device
-- **Teams Integration**: Designed specifically for Microsoft Teams meetings
-- **100% Local**: All processing happens on your machine, no cloud services
+## 1) Requirements
 
-## Quick Start (Windows)
-
-### Prerequisites
-- Windows 10/11 (WASAPI support)
+- Windows 10/11 or macOS (Raycast only runs on macOS; Python pieces also run on Windows)
 - Python 3.10+
-- 4GB+ RAM recommended
-- Raycast for Windows (or macOS with Windows bridge)
+- Pip
+- Node.js 18+ (for the Raycast extension dev/build)
+- Raycast (macOS) with developer CLI installed
 
-### Installation
+Audio deps (Windows):
+- `pyaudiowpatch` (WASAPI loopback support)
 
-1. **Clone and setup Python environment:**
+## 2) Install (Python side)
+
+From the repo root:
+
 ```bash
-git clone https://github.com/yourusername/meetingscribe.git
-cd meetingscribe
+python -m venv .venv
+# Windows
+.venv\\Scripts\\activate
+# macOS/Linux
+# source .venv/bin/activate
 
-python -m venv venv
-venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-2. **Test your setup:**
+Notes:
+- If you only want recording via the Raycast command, the key libs are `pyaudiowpatch` and `loguru` on Windows. The `requirements.txt` covers them.
+- Loopback (system audio) on Windows depends on WASAPI; make sure your audio driver is active. If no system audio is playing, loopback may produce an almost-empty file; the tool falls back to microphone automatically in “auto” mode.
+
+## 3) Install (Raycast extension)
+
+On macOS with Raycast installed:
+
 ```bash
-python system_check.py
+cd raycast-extension
+npm install
+npm run dev   # or: ray develop
 ```
 
-3. **Install Raycast Extension:**
+Then in Raycast, open the extension preferences and set:
+- `pythonPath`: e.g., `python` (or full path to your venv Python)
+- `projectPath`: path to this repo root
+
+The extension uses `quick_record.py` from the repository to record.
+
+## 4) Commands overview (Raycast)
+
+- Start Recording
+  - Starts a new audio capture. In “auto” mode it prefers loopback (system audio); if it sees no frames, it falls back to microphone. You’ll see toasts for started/saved.
+  - Files stored in `storage/recordings` as WAV.
+
+- Recording Status
+  - Shows basic info/tips for troubleshooting and quick checks.
+
+- Recent Recordings
+  - Lists recent items from `storage/recordings`. You can open or export.
+
+- Import Google (script)
+  - Use `import-google.py` from the repo root for Google-related imports. You can wrap it in Raycast (custom script command) or run by terminal.
+
+- Transcript Status
+  - Shows presence of transcript files in `storage/transcriptions` (if you use transcription flows).
+
+## 5) Quick terminal checks
+
+- Record 5s (loopback/mic auto):
+```bash
+python quick_record.py 5
+```
+Expected: prints a JSON line immediately and creates a WAV in `storage/recordings` within ~8–9s.
+
+- Force loopback (play some audio):
+```bash
+python quick_record.py 10 --input loopback
+```
+
+- Force microphone:
+```bash
+python quick_record.py 10 --input mic
+```
+
+## 6) Repository layout (focused)
+
+- `raycast-extension/` – the Raycast extension (icon, commands, UI)
+- `quick_record.py` – fast recording script used by the extension
+- `audio_recorder.py`, `device_manager.py`, `config.py` – core Python recorder + device selection
+- `storage/` – output folders for recordings/transcriptions
+- `requirements.txt` – Python dependencies
+- `import-google.py` – helper for Google imports
+- Other folders/files – kept for reference or future work (organized under descriptive names like `archive/`, `docs/`, etc.). Nothing is deleted.
+
+## 7) Troubleshooting
+
+- Icon not updating in Raycast
+  - The extension uses `raycast-extension/icon.png`. If it doesn’t refresh, run `ray build -e dist` and restart Raycast.
+
+- JSON manifest error on `npm run dev`
+  - Ensure `raycast-extension/package.json` is valid UTF-8 (no BOM). This repo commits it as UTF-8 without BOM.
+
+- No audio saved / tiny files
+  - Loopback requires something to be playing. In “auto”, the recorder switches to microphone if loopback is silent.
+
+## 8) License
+
+MIT
 ```bash
 cd raycast-extension
 npm install
