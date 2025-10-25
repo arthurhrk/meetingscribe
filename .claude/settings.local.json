@@ -31,7 +31,11 @@
       "Bash(./venv/Scripts/python.exe test_record_simple.py)",
       "Bash(Select-String \"DEBUG:|ERROR:\")",
       "Bash(Select-Object -First 5)",
-      "Bash(Select-Object -First 10)"
+      "Bash(Select-Object -First 10)",
+      "Bash(./venv/Scripts/python.exe:*)",
+      "Bash(where:*)",
+      "Bash(del record-old.tsx recent-old.tsx)",
+      "Bash(npm run dev:*)"
     ],
     "deny": []
   }

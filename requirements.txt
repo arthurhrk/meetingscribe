@@ -17,11 +17,19 @@ pyaudiowpatch==0.2.12.7
 wmi==1.5.1
 pywin32==306
 
+# Audio Processing and Transcription
+google-generativeai==0.8.5  # Google Gemini API for transcription
+soundfile==0.13.1  # Audio file I/O
+scipy==1.15.3  # Signal processing for audio optimization
+pydub==0.25.1  # Audio format conversion (requires ffmpeg)
+numpy>=1.23.5,<2.5  # Array operations for audio processing
+
 # Development and Testing
 pytest==8.4.0
 
 # Notes:
 # - pyaudiowpatch provides WASAPI loopback support (Windows)
-# - No AI/ML dependencies (removed transcription features)
-# - Focused on high-quality audio recording only
+# - google-generativeai enables cloud transcription via Gemini API
+# - soundfile/scipy for audio optimization before upload
+# - pydub requires ffmpeg for non-WAV formats (M4A, MP3, etc.)
 # - Raycast extension uses Node.js (see raycast-extension/package.json)

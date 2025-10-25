@@ -1,4 +1,4 @@
-﻿import {
+import {
   ActionPanel,
   Action,
   List,
@@ -7,6 +7,7 @@
   getPreferenceValues,
   Detail,
   Icon,
+  Color,
 } from "@raycast/api";
 import { useState, useEffect } from "react";
 import { spawn } from "child_process";
@@ -16,241 +17,443 @@ import * as path from "path";
 interface Preferences {
   pythonPath: string;
   projectPath: string;
-  defaultModel: string;
-  runnerMode?: string;
 }
 
-interfacaudioDevice {
+interface RecordingQuality {
   id: string;
   name: string;
-  isDefault: boolean;
-  isLoopback: boolean;
-  maxInputChannels?: number;
+  description: string;
+  sizePerMin: string;
+  icon: string;
+  color: Color;
 }
 
-// Keep references to child processes so they are not GC'd
-const activeRecordings = new Map<string, any>();
+interface RecordingStatus {
+  status: string;
+  session_id: string;
+  filename?: string;
+  quality?: string;
+  quality_info?: {
+    name: string;
+    description: string;
+    size_per_min: string;
+  };
+  duration?: number;
+  elapsed?: number;
+  progress?: number;
+  has_audio?: boolean;
+  frames_captured?: number;
+  device?: string;
+  sample_rate?: number;
+  channels?: number;
+  message?: string;
+  error?: string;
+  file_size_mb?: number;
+}
+
+const RECORDING_QUALITIES: RecordingQuality[] = [
+  {
+    id: "quick",
+    name: "Quick (16kHz Mono)",
+    description: "Smaller files, good for voice notes",
+    sizePerMin: "~2 MB/min",
+    icon: "💬",
+    color: Color.Blue,
+  },
+  {
+    id: "standard",
+    name: "Standard (44.1kHz Stereo)",
+    description: "CD quality, balanced file size",
+    sizePerMin: "~10 MB/min",
+    icon: "🎵",
+    color: Color.Green,
+  },
+  {
+    id: "professional",
+    name: "Professional (48kHz Stereo)",
+    description: "Professional quality for meetings",
+    sizePerMin: "~11 MB/min",
+    icon: "🎙️",
+    color: Color.Purple,
+  },
+  {
+    id: "high",
+    name: "High (96kHz Stereo)",
+    description: "Maximum quality, larger files",
+    sizePerMin: "~22 MB/min",
+    icon: "💎",
+    color: Color.Red,
+  },
+];
+
+const DURATION_PRESETS = [
+  { value: -1, label: "⏺️ Manual Mode (Start/Stop)", icon: Icon.Circle, special: true },
+  { value: 30, label: "30 seconds", icon: Icon.Clock },
+  { value: 60, label: "1 minute", icon: Icon.Clock },
+  { value: 120, label: "2 minutes", icon: Icon.Clock },
+  { value: 300, label: "5 minutes", icon: Icon.Video },
+  { value: 600, label: "10 minutes", icon: Icon.Video },
+  { value: 900, label: "15 minutes", icon: Icon.Video },
+  { value: 1800, label: "30 minutes", icon: Icon.Video },
+  { value: 3600, label: "60 minutes", icon: Icon.Video },
+];
+
+// Active recording state
+let activeRecordingProcess: any = null;
+let activeSessionId: string | null = null;
 
 export default function StartRecording() {
-  const [devices, setDevices] = useStataudioDevice[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [selectedQuality, setSelectedQuality] = useState<string>("professional");
   const [isRecording, setIsRecording] = useState(false);
-  const [inputMode, setInputMode] = useState<"auto" | "mic" | "loopback">("auto");
+  const [recordingStatus, setRecordingStatus] = useState<RecordingStatus | null>(null);
+  const [statusCheckInterval, setStatusCheckInterval] = useState<NodeJS.Timer | null>(null);
 
+  // Monitor status file for real-time updates
   useEffect(() => {
-    // Simple mode: always auto-detect device
-    setDevices([
-      {
-        id: "auto",
-        name: "Auto-detect (melhor dispositivo)",
-        isDefault: true,
-        isLoopback: true,
-        maxInputChannels: 2,
-      },
-    ]);
-    setIsLoading(false);
-  }, []);
+    if (isRecording && activeSessionId) {
+      const { projectPath } = getPreferenceValues<Preferences>();
+      const statusFile = path.join(projectPath, "storage", "status", `${activeSessionId}.json`);
 
-  async function startRecording(deviceName: string, Duracaon: number = 30) {
+      const interval = setInterval(() => {
+        try {
+          if (fs.existsSync(statusFile)) {
+            const content = fs.readFileSync(statusFile, "utf8");
+            const status: RecordingStatus = JSON.parse(content);
+            setRecordingStatus(status);
+
+            // Check if completed or error
+            if (status.status === "completed") {
+              setIsRecording(false);
+              clearInterval(interval);
+              showToast({
+                style: Toast.Style.Success,
+                title: "Recording Completed",
+                message: `File saved: ${status.filename} (${status.file_size_mb} MB)`,
+              });
+            } else if (status.status === "error") {
+              setIsRecording(false);
+              clearInterval(interval);
+              showToast({
+                style: Toast.Style.Failure,
+                title: "Recording Failed",
+                message: status.error || "Unknown error",
+              });
+            }
+          }
+        } catch (error) {
+          console.error("Error reading status file:", error);
+        }
+      }, 500); // Check every 500ms for smooth updates
+
+      setStatusCheckInterval(interval);
+
+      return () => {
+        if (interval) clearInterval(interval);
+      };
+    }
+  }, [isRecording, activeSessionId]);
+
+  async function startRecording(quality: string, duration: number) {
     if (isRecording) {
-      await showToast({ style: Toast.Style.Failure, title: "JÃ¡ estÃ¡ gravando", message: "Aguarde terminar" });
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "Already Recording",
+        message: "Please wait for current recording to finish",
+      });
       return;
     }
 
     try {
       setIsRecording(true);
 
-      const minutes = Duracaon >= 60 ? Math.floor(Duracaon / 60) : 0;
-      const seconds = Duracaon % 60;
-      const timeDisplay = minutes > 0 ? `${minutes}min${seconds > 0 ? ` ${seconds}s` : ""}` : `${seconds}s`;
-
-      await showToast({ style: Toast.Style.Animated, title: "Iniciando gravaÃ§Ã£o", message: `DuraÃ§Ã£o: ${timeDisplay}` });
-
       const { pythonPath, projectPath } = getPreferenceValues<Preferences>();
 
-      if (!projectPath || !projectPath.trim() || !fs.existsSync(projectPath)) {
-        await showToast({
-          style: Toast.Style.Failure,
-          title: "ConfiguraÃ§Ã£o incompleta",
-          message: "Defina 'Project Path' nas preferÃªncias do Raycast",
-        });
-        setIsRecording(false);
-        return;
+      // Validate paths
+      if (!projectPath || !fs.existsSync(projectPath)) {
+        throw new Error("Invalid project path in preferences");
       }
 
-      // Always use quick_record.py (prints JSON immediately, then records)
-      let scriptPath = path.join(projectPath, "quick_record.py");
+      // Check if manual mode (duration = -1)
+      const isManualMode = duration === -1;
+
+      const scriptPath = isManualMode
+        ? path.join(projectPath, "record_manual.py")
+        : path.join(projectPath, "record_with_status.py");
+
       if (!fs.existsSync(scriptPath)) {
-        // Fallback to archive/scripts/quick_record.py
-        const alt = path.join(projectPath, "archive", "scripts", "quick_record.py");
-        if (fs.existsSync(alt)) {
-          scriptPath = alt;
-        } else {
-          await showToast({
-            style: Toast.Style.Failure,
-            title: "Script nao encontrado",
-            message: `quick_record.py nao esta¡ em ${projectPath}`,
-          });
-          setIsRecording(false);
-          return;
-        }
+        throw new Error(`Script not found: ${scriptPath}`);
       }
 
-      const response = await new Promise<any>((resolve, reject) => {
-        const child = spawn(pythonPath, [scriptPath, Duracaon.toString(), '--input', (inputMode || 'auto')], {
-          cwd: projectPath,
-          windowsHide: true,
-          detached: false,
-        audio: ["ignore", "pipe", "pipe"],
-        });
+      // Generate session ID
+      const sessionId = `rec-${Date.now()}`;
+      activeSessionId = sessionId;
 
-        let jsonReceived = false;
-        let buffer = "";
-        let stderrBuffer = "";
+      const toastMessage = isManualMode
+        ? `Manual mode - ${quality} quality`
+        : `${duration}s - ${quality} quality`;
 
-        child.stdout?.setEncoding("utf8");
-        child.stdout?.on("data", (data) => {
-          if (!jsonReceived) {
-            buffer += data.toString();
-            const lines = buffer.split("\n");
-            for (const line of lines) {
-              if (line.trim().startsWith("{")) {
-                try {
-                  const parsed = JSON.parse(line.trim());
-                  jsonReceived = true;
+      await showToast({
+        style: Toast.Style.Animated,
+        title: "Starting Recording",
+        message: toastMessage,
+      });
 
-                  const sessionId = parsed.data?.session_id || "unknown";
-                  activeRecordings.set(sessionId, child);
-                  child.on("exit", () => activeRecordings.delete(sessionId));
+      // Start recording process
+      const args = isManualMode
+        ? ["start", quality, sessionId]
+        : [duration.toString(), quality, sessionId];
 
-                  resolve(parsed);
-                  return;
-                } catch (e) {
-                  // keep reading until valid JSON
+      const child = spawn(pythonPath, [scriptPath, ...args], {
+        cwd: projectPath,
+        windowsHide: true,
+        detached: false,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      activeRecordingProcess = child;
+
+      let jsonReceived = false;
+      let buffer = "";
+
+      child.stdout?.setEncoding("utf8");
+      child.stdout?.on("data", (data) => {
+        if (!jsonReceived) {
+          buffer += data.toString();
+          const lines = buffer.split("\n");
+          for (const line of lines) {
+            if (line.trim().startsWith("{")) {
+              try {
+                const parsed = JSON.parse(line.trim());
+                jsonReceived = true;
+
+                if (parsed.status === "success") {
+                  showToast({
+                    style: Toast.Style.Success,
+                    title: "Recording Started",
+                    message: `Monitor progress below`,
+                  });
                 }
+                return;
+              } catch (e) {
+                // Continue reading
               }
             }
           }
-        });
-
-        child.stderr?.on("data", (data) => {
-          stderrBuffer += data.toString();
-        });
-
-        child.on("error", (error) => {
-          if (!jsonReceived) {
-            const err = stderrBuffer ? new Error(`${error.message} | ${stderrBuffer.substring(0, 200)}`) : error;
-            reject(err as Error);
-          }
-        });
-
-        // Safety timeout for the initial JSON
-        setTimeout(() => {
-          if (!jsonReceived) {
-            const hint = stderrBuffer ? ` | stderr: ${stderrBuffer.substring(0, 200)}` : "";
-            reject(new Error("Timeout waiting for recording to start" + hint));
-          }
-        }, 8000);
+        }
       });
 
-      if (response.status === "success") {
-        const data = response.data || {};
-        const filePath = data.file_path as string;
-        const filename = filePath ? filePath.split("\\").pop() : "recording.wav";
+      child.stderr?.on("data", (data) => {
+        console.error("Recording error:", data.toString());
+      });
 
-        await showToast({ style: Toast.Style.Success, title: "GravaÃ§Ã£o iniciada", message: `${timeDisplay} - ${filename}` });
+      child.on("error", (error) => {
+        if (!jsonReceived) {
+          setIsRecording(false);
+          showToast({
+            style: Toast.Style.Failure,
+            title: "Failed to Start",
+            message: error.message,
+          });
+        }
+      });
 
-        // Post-check: verify file creation after expected Duracaon
-        const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(projectPath, filePath);
-        setTimeout(() => {
-          try {
-            if (fs.existsSync(absPath)) {
-              showToast({ style: Toast.Style.Success, title: "Arquivo salvo", message: filename });
-            } else {
-              showToast({
-                style: Toast.Style.Failure,
-                title: "Falha ao salvar",
-                message: `Nao encontrei ${filename}. Dica: toque algumaudio do sistema ou tente novamente.`,
-              });
-            }
-          } catch {
-            // ignore post-check errors
-          }
-        }, (Duracaon + 4) * 1000);
-      } else {
-        throw new Error(response.error?.message || "Failed to start recording");
-      }
+      child.on("exit", (code) => {
+        setIsRecording(false);
+        activeRecordingProcess = null;
+        activeSessionId = null;
+
+        if (code !== 0 && !recordingStatus) {
+          showToast({
+            style: Toast.Style.Failure,
+            title: "Recording Failed",
+            message: `Process exited with code ${code}`,
+          });
+        }
+      });
+
+      // Safety timeout
+      setTimeout(() => {
+        if (!jsonReceived) {
+          setIsRecording(false);
+          showToast({
+            style: Toast.Style.Failure,
+            title: "Timeout",
+            message: "Recording failed to start within 8 seconds",
+          });
+        }
+      }, 8000);
     } catch (error) {
+      setIsRecording(false);
       const errorMsg = error instanceof Error ? error.message : String(error);
-      const isTimeout = errorMsg.toLowerCase().includes("timeout");
       await showToast({
         style: Toast.Style.Failure,
-        title: "Erro ao iniciar",
-        message: isTimeout ? "Timeout - verifique Python e dependencias" : errorMsg.substring(0, 100),
+        title: "Error",
+        message: errorMsg,
       });
-    } finally {
-      setIsRecording(false);
     }
   }
 
-  if (error) {
+  // Stop manual recording function
+  async function stopManualRecording() {
+    if (!activeSessionId) return;
+
+    try {
+      const { pythonPath, projectPath } = getPreferenceValues<Preferences>();
+      const scriptPath = path.join(projectPath, "record_manual.py");
+
+      await showToast({
+        style: Toast.Style.Animated,
+        title: "Stopping Recording",
+        message: "Finalizing audio file...",
+      });
+
+      // Call stop command
+      spawn(pythonPath, [scriptPath, "stop", activeSessionId], {
+        cwd: projectPath,
+        windowsHide: true,
+      });
+
+      // Wait a bit for stop signal to be processed
+      setTimeout(() => {
+        showToast({
+          style: Toast.Style.Success,
+          title: "Stop Signal Sent",
+          message: "Recording will finish shortly",
+        });
+      }, 1000);
+    } catch (error) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "Error Stopping",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  // Render recording status view
+  if (isRecording && recordingStatus) {
+    const progress = recordingStatus.progress || 0;
+    const elapsed = recordingStatus.elapsed || 0;
+    const duration = recordingStatus.duration || 0;
+    const remaining = duration - elapsed;
+    const isManualMode = duration === 0;
+
+    const progressBar = isManualMode
+      ? "🔴 Recording (Manual Mode)"
+      : "█".repeat(Math.floor(progress / 5)) + "░".repeat(20 - Math.floor(progress / 5));
+
+    const timeInfo = isManualMode
+      ? `${elapsed}s (No time limit - press Stop when done)`
+      : `${elapsed}s / ${duration}s (${remaining}s remaining)`;
+
+    const markdown = `
+# 🔴 Recording in Progress
+
+${progressBar} ${!isManualMode ? `**${progress.toFixed(1)}%**` : ""}
+
+## Status
+- **Time**: ${timeInfo}
+- **Quality**: ${recordingStatus.quality_info?.name || recordingStatus.quality}
+- **Device**: ${recordingStatus.device || "N/A"}
+- **Audio**: ${recordingStatus.sample_rate}Hz, ${recordingStatus.channels}ch
+- **Audio Detected**: ${recordingStatus.has_audio ? "✅ Yes" : "⏳ Waiting..."}
+- **Frames Captured**: ${recordingStatus.frames_captured || 0}
+
+## File Info
+- **Filename**: ${recordingStatus.filename}
+- **Expected Size**: ${recordingStatus.quality_info?.size_per_min || "N/A"}
+
+${!recordingStatus.has_audio && elapsed > 3 ? "\n⚠️ **Warning**: No audio detected yet. Check if Teams is playing audio." : ""}
+
+${isManualMode ? "\n\n💡 **Tip**: Press **Stop Recording** button below when you're done!" : ""}
+
+---
+
+*${isManualMode ? "Manual mode - use Stop button to finish" : "Recording will automatically save when complete"}*
+`;
+
     return (
       <Detail
-        markdown={`# Erro ao carregar\n\n${error}\n\nVerifique:\n- Python configurado\n- Caminho do projeto correto\n- dependencias instaladas`}
+        markdown={markdown}
+        actions={
+          <ActionPanel>
+            {isManualMode && (
+              <Action
+                title="⏹️ Stop Recording"
+                icon={Icon.Stop}
+                style={Action.Style.Destructive}
+                onAction={stopManualRecording}
+              />
+            )}
+            <Action
+              title="Refresh Status"
+              icon={Icon.ArrowClockwise}
+              onAction={() => {
+                showToast({ style: Toast.Style.Success, title: "Status refreshed" });
+              }}
+            />
+          </ActionPanel>
+        }
       />
     );
   }
 
+  // Render quality and duration selection
   return (
-    <List isLoading={isLoading} searchBarPlaceholder="Escolha a duracao da gravacao...">
-      <List.Section title="Duracao da Gravacao">
-        {devices.map((device) => (
+    <List
+      isLoading={false}
+      searchBarPlaceholder="Select recording quality and duration..."
+      searchBarAccessory={
+        <List.Dropdown
+          tooltip="Recording Quality"
+          value={selectedQuality}
+          onChange={setSelectedQuality}
+        >
+          {RECORDING_QUALITIES.map((quality) => (
+            <List.Dropdown.Item
+              key={quality.id}
+              title={`${quality.icon} ${quality.name}`}
+              value={quality.id}
+            />
+          ))}
+        </List.Dropdown>
+      }
+    >
+      <List.Section title="Recording Duration">
+        {DURATION_PRESETS.map((preset) => (
           <List.Item
-            key={device.id}
-            title={isRecording ? "Gravando..." : device.name}
-            subtitle={isRecording ? "Aguarde terminar" : "Selecione o tempo desejado"}
-            icon={isRecording ? Icon.CircleFilled : Icon.Microphone}
-            accessories={[{ text: `Entrada: ${inputMode}` }]}
+            key={preset.value}
+            title={preset.label}
+            icon={preset.icon}
+            accessories={[
+              {
+                text: RECORDING_QUALITIES.find((q) => q.id === selectedQuality)?.sizePerMin || "",
+                icon: Icon.HardDrive,
+              },
+            ]}
             actions={
               <ActionPanel>
-                <Action title="Gravar 30s" onAction={() => startRecording(device.name, 30)} icon={Icon.Circle} />
-                <Action title="Gravar 60s" onAction={() => startRecording(device.name, 60)} icon={Icon.Circle} />
-                <Action title="Gravar 2min" onAction={() => startRecording(device.name, 120)} icon={Icon.Circle} />
-                <Action title="Gravar 5min" onAction={() => startRecording(device.name, 300)} icon={Icon.Video} />
-                <Action title="Gravar 10min" onAction={() => startRecording(device.name, 600)} icon={Icon.Video} />
-                <Action title="Gravar 15min" onAction={() => startRecording(device.name, 900)} icon={Icon.Video} />
-                <Action title="Gravar 30min" onAction={() => startRecording(device.name, 1800)} icon={Icon.Video} />
-                <ActionPanel.Section title="Modo de entrada">
-                  <Action title={`Modo: Auto${inputMode==='auto'?' (ativo)':''}`} onAction={() => setInputMode('auto')} icon={Icon.Dot} />
-                  <Action title={`Modo: Microfone${inputMode==='mic'?' (ativo)':''}`} onAction={() => setInputMode('mic')} icon={Icon.Microphone} />
-                  <Action title={`Modo: Loopback${inputMode==='loopback'?' (ativo)':''}`} onAction={() => setInputMode('loopback')} icon={Icon.ArrowClockwise} />
-                </ActionPanel.Section>
+                <Action
+                  title={`Start Recording (${preset.label})`}
+                  icon={Icon.Circle}
+                  onAction={() => startRecording(selectedQuality, preset.value)}
+                />
               </ActionPanel>
             }
           />
         ))}
       </List.Section>
 
-      <List.Section title="Informacoes">
-        <List.Item
-          icon={Icon.Info}
-          title="Como funciona"
-          subtitle="Auto-detecta o melhor dispositivo audio disponivel"
-        />
-        <List.Item
-          icon={Icon.Gear}
-          title="Configuracoes"
-          subtitle="Defina Python e o caminho do projeto nas preferencias"
-        />
+      <List.Section title="Quality Info">
+        {RECORDING_QUALITIES.map((quality) => (
+          <List.Item
+            key={quality.id}
+            title={`${quality.icon} ${quality.name}`}
+            subtitle={quality.description}
+            accessories={[{ text: quality.sizePerMin }]}
+          />
+        ))}
       </List.Section>
     </List>
   );
 }
-
-
-
-
-
-
-

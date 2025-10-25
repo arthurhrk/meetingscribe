@@ -11,7 +11,13 @@ type ExtensionPreferences = {
   /** Python Path - Path to Python executable (e.g., python or ./venv/Scripts/python.exe) */
   "pythonPath": string,
   /** Project Path - Path to the MeetingScribe project directory */
-  "projectPath": string
+  "projectPath": string,
+  /** Google Gemini API Key - API key for Google Gemini transcription service (get it from https://makersuite.google.com/app/apikey) */
+  "geminiApiKey": string,
+  /** Gemini Model - Choose which Gemini model to use for transcription */
+  "geminiModel": "models/gemini-2.0-flash-exp" | "models/gemini-1.5-pro",
+  /** Optimize Audio Before Upload - Reduce audio file size before uploading (converts to 16kHz mono WAV). Requires ffmpeg for non-WAV files. */
+  "optimizeAudio": boolean
 }
 
 /** Preferences accessible in all the extension's commands */
@@ -20,8 +26,12 @@ declare type Preferences = ExtensionPreferences
 declare namespace Preferences {
   /** Preferences accessible in the `record` command */
   export type Record = ExtensionPreferences & {}
+  /** Preferences accessible in the `recording-status` command */
+  export type RecordingStatus = ExtensionPreferences & {}
   /** Preferences accessible in the `recent` command */
   export type Recent = ExtensionPreferences & {}
+  /** Preferences accessible in the `transcript-status` command */
+  export type TranscriptStatus = ExtensionPreferences & {}
   /** Preferences accessible in the `status` command */
   export type Status = ExtensionPreferences & {}
 }
@@ -29,8 +39,12 @@ declare namespace Preferences {
 declare namespace Arguments {
   /** Arguments passed to the `record` command */
   export type Record = {}
+  /** Arguments passed to the `recording-status` command */
+  export type RecordingStatus = {}
   /** Arguments passed to the `recent` command */
   export type Recent = {}
+  /** Arguments passed to the `transcript-status` command */
+  export type TranscriptStatus = {}
   /** Arguments passed to the `status` command */
   export type Status = {}
 }
