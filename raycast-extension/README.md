@@ -1,42 +1,89 @@
 # MeetingScribe Raycast Extension
 
-Extensão oficial do MeetingScribe para Raycast - acesso instantâneo a todas as funcionalidades via ⌘ Space.
+Record Microsoft Teams meetings with professional-quality audio directly from Raycast.
 
-## 🚀 Comandos Disponíveis
+## Features
 
-- **`ms record`** - Inicia nova gravação de áudio
-- **`ms recent`** - Lista transcrições recentes com preview
-- **`ms transcribe`** - Transcreve arquivo de áudio existente
-- **`ms status`** - Verifica status do sistema e dispositivos
-- **`ms export`** - Exporta transcrições rapidamente
+- **Start Recording**: Launch high-quality audio recording instantly
+- **Recent Recordings**: Browse and manage your recording library
+- **Recording Status**: Monitor active recordings in real-time
+- **System Status**: Check audio devices and system health
+- **Import Google**: Transcribe recordings using Google Gemini (optional)
 
-## ⚙️ Configuração
+## Requirements
 
-### Pré-requisitos
+1. **MeetingScribe** installed and configured
+2. **Raycast** (latest version)
+3. **Python 3.9+** with virtual environment
+4. **Windows 10/11** (required for WASAPI loopback capture)
 
-1. **MeetingScribe** instalado e funcionando
-2. **Raycast** instalado
-3. **Node.js** 18+ para desenvolvimento
+## Setup
 
-### Instalação
+### 1. Install MeetingScribe
 
-1. Clone este diretório ou baixe os arquivos
-2. Configure as preferências no Raycast:
-   - **Python Path**: Caminho para Python (ex: `python` ou caminho completo)
-   - **Project Path**: Caminho completo para o diretório do MeetingScribe
-   - **Default Model**: Modelo Whisper padrão (recomendado: `base`)
-
-### Configuração de Preferências
-
-```
-Python Path: python
-Project Path: C:\Users\seu-usuario\MeetingScribe
-Default Model: base
+```bash
+git clone <repository-url>
+cd meetingscribe
+python scripts/bootstrap.py
 ```
 
-## 🔧 Desenvolvimento
+### 2. Configure Raycast Extension
 
-### Setup Local
+Open Raycast Extension Preferences and set:
+
+- **Python Path**: Path to your Python executable
+  - Example: `.venv\Scripts\python.exe` (Windows)
+  - Or full path: `C:\Users\username\meetingscribe\.venv\Scripts\python.exe`
+
+- **Project Path**: Full path to MeetingScribe directory
+  - Example: `C:\Users\username\meetingscribe`
+
+### 3. Optional: Google Gemini API
+
+For transcription features:
+- Get API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+- Add to preferences: **Google Gemini API Key**
+
+## Usage
+
+### Recording Commands
+
+- **⌘ Space** → Type `Start Recording` → Choose quality and duration
+- **⌘ Space** → Type `Recent Recordings` → Browse your files
+- **⌘ Space** → Type `Recording Status` → Monitor active recordings
+- **⌘ Space** → Type `System Status` → Check audio devices
+
+### Recording Quality Options
+
+- **Quick (16kHz Mono)**: ~2 MB/min - Voice notes
+- **Standard (44.1kHz Stereo)**: ~10 MB/min - Balanced
+- **Professional (48kHz Stereo)**: ~11 MB/min - Teams meetings (recommended)
+- **High (96kHz Stereo)**: ~22 MB/min - Maximum quality
+
+## Troubleshooting
+
+### Python Path Not Found
+- Ensure Python Path points to the correct executable
+- Use absolute paths for clarity
+- On Windows, use forward slashes or escaped backslashes
+
+### Project Path Not Found
+- Use the full absolute path to the MeetingScribe directory
+- Verify the path exists and contains the `src/` folder
+
+### No Audio Devices
+- Run `System Status` command to check WASAPI devices
+- Ensure your audio device is connected
+- Windows only: WASAPI loopback is required
+
+### Recording Not Capturing Audio
+- Play some audio before starting recording
+- Check that Teams is using the correct audio device
+- Verify loopback device is selected in System Status
+
+## Development
+
+### Local Development
 
 ```bash
 cd raycast-extension
@@ -44,90 +91,13 @@ npm install
 npm run dev
 ```
 
-### Build para Produção
+### Build for Production
 
 ```bash
 npm run build
-npm run publish
+npm run lint
 ```
 
-## 📋 Bridge Python-TypeScript (Agnóstico de Transporte)
+## License
 
-A extensão se comunica com o MeetingScribe Python de forma transporte-agnóstica:
-
-- **STDIO Runner (preferido para progresso)**: Processo persistente (`python -m src.core.stdio_server`) com mensagens JSON por stdin/stdout. Usado para gravação/transcrição com progresso em tempo real e menor latência (mantém modelos carregados).
-- **CLI JSON (exec-once)**: Comandos pontuais via `python -m src.core.runtime_cli ...` retornando JSON puro. Usado para listagens/exports e status rápidos quando não há necessidade de manter processo vivo.
-- **File System**: Leitura leve para previews (quando aplicável).
-
-### Métodos/Comandos Esperados
-
-```bash
-# STDIO (processo persistente)
-python -m src.core.stdio_server
-
-# Exemplos de requests por linha (JSON):
-{"id":1, "method":"devices.list"}
-{"id":2, "method":"record.start", "params": {"device_id":"17", "stream":true}}
-{"id":3, "method":"transcription.start", "params": {"audio_path":"file.wav", "model":"base", "stream":true}}
-{"id":4, "method":"files.list", "params": {"type":"transcriptions", "limit":20}}
-{"id":5, "method":"export.run", "params": {"filename":"<base>", "format":"srt"}}
-
-# CLI JSON (execução única)
-python -m src.core.runtime_cli devices
-python -m src.core.runtime_cli system
-python -m src.core.runtime_cli files transcriptions --limit 20
-python -m src.core.runtime_cli export "<base>" --format srt
-```
-
-## 🎯 Features
-
-### ✅ Implementado
-
-- Comandos básicos (record, recent, transcribe, status, export)
-- Interface visual com listas e formulários
-- Preview inline de transcrições
-- Actions contextuais
-- Configurações integradas
-- Comunicação Python-TypeScript (STDIO + CLI JSON)
-
-### 🟡 Em Desenvolvimento
-
-- Notificações de progresso em tempo real (via STDIO events)
-- Cache de dados para performance
-- Validação de configurações
-- Error handling avançado
-
-### 🔴 Planejado
-
-- Drag & drop de arquivos
-- Shortcuts customizáveis
-- Temas e personalização
-- Integração com outras ferramentas
-
-## 🐛 Troubleshooting
-
-### Erro: "STDIO server not running"
-- Confirme `Python Path` e `Project Path` nas preferências
-- Reinicie a extensão para religar o STDIO runner
-
-### Erro: "Project path not found"
-- Configure o caminho completo para o diretório do MeetingScribe
-- Use barras invertidas duplas no Windows: `C:\\Users\\...`
-
-### Preview não carrega
-- Verifique se os arquivos de transcrição existem
-- Confirme as permissões de leitura dos arquivos
-
-## ⚙️ Runner Mode
-
-- **Exec-once (CLI JSON)**: usado para listagens e exportações. Baixa sobrecarga, inicia e termina a cada chamada.
-- **STDIO Daemon**: usado para gravação/transcrição. Processo persistente que emite eventos de progresso em JSONL. Reduz latência por manter modelos carregados.
-
-Preferências necessárias:
-- `Python Path`: caminho do binário do Python (ex.: `python`)
-- `Project Path`: diretório do repositório MeetingScribe
-- `Default Model`: modelo default do Whisper (ex.: `base`)
-
-## 📄 Licença
-
-MIT - Mesmo que o projeto MeetingScribe principal.
+MIT - Same as the main MeetingScribe project

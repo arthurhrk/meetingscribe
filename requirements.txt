@@ -15,7 +15,7 @@ pyaudiowpatch==0.2.12.7
 
 # Windows Integration (Teams detection)
 wmi==1.5.1
-pywin32==306
+pywin32>=307
 
 # Audio Processing and Transcription
 google-generativeai==0.8.5  # Google Gemini API for transcription

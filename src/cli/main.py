@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Optional
 
 from loguru import logger
-from src.audio import AudioRecorder, AudioRecorderError
+from audio import AudioRecorder, AudioRecorderError
 from config import settings
 
 
@@ -31,16 +31,21 @@ def quick_record(duration: int = 30, filename: Optional[str] = None) -> dict:
     """
     # Generate identifiers
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    session_id = f"rec-{timestamp}"
     if not filename:
         filename = f"recording_{timestamp}.wav"
 
     filepath = Path(settings.recordings_dir) / filename
+    status_file = Path(settings.status_dir) / f"{session_id}.json"
+
+    # Ensure status directory exists
+    settings.status_dir.mkdir(parents=True, exist_ok=True)
 
     # Return JSON immediately
     result = {
         "status": "success",
         "data": {
-            "session_id": f"rec-{timestamp}",
+            "session_id": session_id,
             "file_path": str(filepath),
             "filename": filename,
             "duration": duration,
@@ -50,13 +55,21 @@ def quick_record(duration: int = 30, filename: Optional[str] = None) -> dict:
 
     # Start recording in background thread
     def record_worker():
-        """Background worker for recording"""
+        """Background worker for recording with status updates"""
+        start_time = time.time()
+
         try:
             recorder = AudioRecorder()
 
             # Auto-select best device (WASAPI loopback preferred)
             if not recorder.set_device_auto():
                 logger.error("Failed to select audio device")
+                # Write error status
+                status_file.write_text(json.dumps({
+                    "status": "error",
+                    "session_id": session_id,
+                    "error": "Failed to select audio device"
+                }))
                 return
 
             # Configure duration
@@ -66,30 +79,93 @@ def quick_record(duration: int = 30, filename: Optional[str] = None) -> dict:
             recorder.start_recording(filename=filename)
             logger.info(f"Recording started: {filename} ({duration}s)")
 
-            # Wait for completion
-            time.sleep(duration + 2)
+            # Write initial status
+            status_file.write_text(json.dumps({
+                "status": "recording",
+                "session_id": session_id,
+                "filename": filename,
+                "duration": duration,
+                "elapsed": 0,
+                "progress": 0
+            }))
+
+            # Update status every second
+            for i in range(duration):
+                time.sleep(1)
+                elapsed = int(time.time() - start_time)
+                progress = min(100, int((elapsed / duration) * 100))
+
+                status_file.write_text(json.dumps({
+                    "status": "recording",
+                    "session_id": session_id,
+                    "filename": filename,
+                    "duration": duration,
+                    "elapsed": elapsed,
+                    "progress": progress
+                }))
 
             # Stop recording
-            if recorder.is_recording():
-                recorder.stop_recording()
-                logger.info(f"Recording completed: {filepath}")
+            recorder.stop_recording()
+            logger.info(f"Recording completed: {filepath}")
 
             recorder.close()
 
+            # Wait a moment for file to be fully written
+            time.sleep(1)
+
+            # Get file size
+            file_size_mb = round(filepath.stat().st_size / (1024 * 1024), 2) if filepath.exists() else 0
+
+            # Write completion status
+            status_file.write_text(json.dumps({
+                "status": "completed",
+                "session_id": session_id,
+                "filename": filename,
+                "duration": duration,
+                "file_size_mb": file_size_mb
+            }))
+
+            logger.info(f"Status updated to completed: {file_size_mb}MB")
+
         except AudioRecorderError as e:
             logger.error(f"Recording error: {e}")
+            status_file.write_text(json.dumps({
+                "status": "error",
+                "session_id": session_id,
+                "error": f"Recording error: {str(e)}"
+            }))
         except Exception as e:
             logger.error(f"Unexpected error: {e}")
+            status_file.write_text(json.dumps({
+                "status": "error",
+                "session_id": session_id,
+                "error": f"Unexpected error: {str(e)}"
+            }))
 
     # Start non-daemon thread (keeps process alive)
     thread = threading.Thread(target=record_worker, daemon=False)
     thread.start()
 
-    return result
+    return result, thread
 
 
 def main():
     """Main CLI entry point"""
+
+    # Disable console logging when called with arguments (Raycast/CLI mode)
+    # This prevents log messages from appearing as "errors" in Raycast
+    if len(sys.argv) > 1:
+        # Remove console handler, keep only file logging
+        logger.remove()
+        from config import settings
+        logger.add(
+            settings.logs_dir / "meetingscribe.log",
+            rotation="10 MB",
+            retention="1 month",
+            level=settings.log_level,
+            format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {message}"
+        )
+
     print("=" * 60)
     print("MeetingScribe - Teams Recording")
     print("=" * 60)
@@ -102,20 +178,20 @@ def main():
         if command == "record":
             # Quick record mode
             duration = int(sys.argv[2]) if len(sys.argv) > 2 else 30
-            result = quick_record(duration=duration)
+            result, thread = quick_record(duration=duration)
             print(json.dumps(result), flush=True)
 
             # Wait for recording to complete
-            time.sleep(duration + 3)
+            thread.join()
             return
 
         elif command == "status":
             # System status check
-            from src.audio import DeviceManager
+            from audio import DeviceManager
 
             try:
                 dm = DeviceManager()
-                devices = dm.list_devices()
+                devices = dm.list_all_devices()
 
                 result = {
                     "status": "success",
@@ -144,7 +220,8 @@ def main():
 
     # Interactive mode
     print("Interactive mode coming soon...")
-    print("Use: python -m src.cli.main record <duration>")
+    print("Use: python -m cli record <duration>")
+    print("     python -m cli status")
     print()
 
 

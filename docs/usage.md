@@ -28,7 +28,7 @@ This checks:
 
 2. **Test a quick recording:**
 ```bash
-python -m src.cli.main record 5
+python -m cli record 5
 ```
 
 This records 5 seconds to `storage/recordings/` as a test.
@@ -79,18 +79,18 @@ Check your recordings:
 
 ```bash
 # Record for 30 seconds (default)
-python -m src.cli.main record
+python -m cli record
 
 # Record for specific duration (in seconds)
-python -m src.cli.main record 60
-python -m src.cli.main record 300  # 5 minutes
-python -m src.cli.main record 1800 # 30 minutes
+python -m cli record 60
+python -m cli record 300  # 5 minutes
+python -m cli record 1800 # 30 minutes
 ```
 
 ### Check System Status
 
 ```bash
-python -m src.cli.main status
+python -m cli status
 ```
 
 Shows:
@@ -149,7 +149,7 @@ robocopy storage\recordings D:\Backups\Recordings *.wav /S
 
 2. **Test before important meetings**
    ```bash
-   python -m src.cli.main record 5
+   python -m cli record 5
    ```
    Verify the WAV file plays correctly
 
@@ -208,7 +208,7 @@ audio_format = paInt16     # 16-bit
 
 3. Verify audio device:
    ```bash
-   python -m src.cli.main status
+   python -m cli status
    ```
    Should show at least one loopback device
 
@@ -224,7 +224,7 @@ audio_format = paInt16     # 16-bit
 
 2. **Check device selection**:
    ```bash
-   python -m src.cli.main status
+   python -m cli status
    ```
    Look for "loopback" devices - these capture system audio
 
@@ -340,7 +340,7 @@ Record multiple sessions:
 ```bash
 # Record 3 sessions of 5 minutes each
 for /L %i in (1,1,3) do (
-  python -m src.cli.main record 300
+  python -m cli record 300
   timeout /t 60 /nobreak
 )
 ```
@@ -350,7 +350,7 @@ for /L %i in (1,1,3) do (
 Use Windows Task Scheduler:
 1. Create task
 2. Trigger: Schedule time
-3. Action: `python -m src.cli.main record 1800`
+3. Action: `python -m cli record 1800`
 4. Start in: Your meetingscribe directory
 
 ---
@@ -359,5 +359,5 @@ Use Windows Task Scheduler:
 
 - **System issues**: Run `python system_check.py`
 - **Check logs**: `logs/meetingscribe.log`
-- **Test recording**: `python -m src.cli.main record 5`
+- **Test recording**: `python -m cli record 5`
 - **Review README**: See main [README.md](../README.md)

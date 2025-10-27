@@ -8,11 +8,11 @@
 /* eslint-disable @typescript-eslint/ban-types */
 
 type ExtensionPreferences = {
-  /** Python Path - Path to Python executable (e.g., python or ./venv/Scripts/python.exe) */
+  /** Python Path - Path to Python executable (e.g., .venv/Scripts/python.exe) */
   "pythonPath": string,
-  /** Project Path - Path to the MeetingScribe project directory */
+  /** Project Path - Full path to the MeetingScribe project directory */
   "projectPath": string,
-  /** Google Gemini API Key - API key for Google Gemini transcription service (get it from https://makersuite.google.com/app/apikey) */
+  /** Google Gemini API Key - API key for Google Gemini transcription service (optional - get from https://makersuite.google.com/app/apikey) */
   "geminiApiKey": string,
   /** Gemini Model - Choose which Gemini model to use for transcription */
   "geminiModel": "models/gemini-2.0-flash-exp" | "models/gemini-1.5-pro",
@@ -26,6 +26,8 @@ declare type Preferences = ExtensionPreferences
 declare namespace Preferences {
   /** Preferences accessible in the `record` command */
   export type Record = ExtensionPreferences & {}
+  /** Preferences accessible in the `import-google` command */
+  export type ImportGoogle = ExtensionPreferences & {}
   /** Preferences accessible in the `recording-status` command */
   export type RecordingStatus = ExtensionPreferences & {}
   /** Preferences accessible in the `recent` command */
@@ -39,6 +41,8 @@ declare namespace Preferences {
 declare namespace Arguments {
   /** Arguments passed to the `record` command */
   export type Record = {}
+  /** Arguments passed to the `import-google` command */
+  export type ImportGoogle = {}
   /** Arguments passed to the `recording-status` command */
   export type RecordingStatus = {}
   /** Arguments passed to the `recent` command */

@@ -10,8 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from loguru import logger
 from config import settings
-from device_manager import DeviceManager
-from audio_recorder import AudioRecorder
+from audio import DeviceManager, AudioRecorder
 import threading
 import json
 
