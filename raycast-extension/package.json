@@ -1,8 +1,8 @@
-﻿{
+{
     "$schema":  "https://www.raycast.com/schemas/extension.json",
     "name":  "meetingscribe",
-    "title":  "Meetingscribe",
-    "description":  "An intelligent meeting transcription system with 100% local processing using AI.",
+    "title":  "MeetingScribe",
+    "description":  "Record Microsoft Teams meetings with professional-quality audio using WASAPI loopback capture.",
     "icon":  "icon.png",
     "author":  "Arthurhrk",
     "license":  "MIT",
@@ -20,15 +20,15 @@
                          "mode":  "view",
                          "keywords":  [
                                           "record",
-                                          "gravacao",
                                           "audio",
                                           "meeting",
-                                          "teams"
+                                          "teams",
+                                          "wasapi"
                                       ]
                      },
                      {
                          "name":  "import-google",
-                         "title":  "Import Google",
+                         "title":  "Transcribe Audio",
                          "subtitle":  "MeetingScribe",
                          "description":  "Transcribe a recording using Google Gemini",
                          "mode":  "view",
@@ -63,8 +63,8 @@
                          "keywords":  [
                                           "recent",
                                           "recordings",
-                                          "historico",
-                                          "arquivos"
+                                          "history",
+                                          "files"
                                       ]
                      },
                      {
@@ -77,8 +77,8 @@
                                           "transcript",
                                           "transcription",
                                           "status",
-                                          "transcricao",
-                                          "gemini"
+                                          "gemini",
+                                          "progress"
                                       ]
                      },
                      {
@@ -99,26 +99,29 @@
                         {
                             "name":  "pythonPath",
                             "title":  "Python Path",
-                            "description":  "Path to Python executable (e.g., python or ./venv/Scripts/python.exe)",
+                            "description":  "Path to Python executable (e.g., .venv/Scripts/python.exe)",
                             "type":  "textfield",
-                            "default":  "python",
-                            "required":  false
+                            "default":  ".venv/Scripts/python.exe",
+                            "required":  true,
+                            "placeholder":  ".venv/Scripts/python.exe"
                         },
                         {
                             "name":  "projectPath",
                             "title":  "Project Path",
-                            "description":  "Path to the MeetingScribe project directory",
+                            "description":  "Full path to the MeetingScribe project directory",
                             "type":  "textfield",
                             "default":  "",
-                            "required":  true
+                            "required":  true,
+                            "placeholder":  "C:/Users/username/meetingscribe"
                         },
                         {
                             "name":  "geminiApiKey",
                             "title":  "Google Gemini API Key",
-                            "description":  "API key for Google Gemini transcription service (get it from https://makersuite.google.com/app/apikey)",
+                            "description":  "API key for Google Gemini transcription service (optional - get from https://makersuite.google.com/app/apikey)",
                             "type":  "password",
                             "default":  "",
-                            "required":  false
+                            "required":  false,
+                            "placeholder":  "Enter your Gemini API key"
                         },
                         {
                             "name":  "geminiModel",

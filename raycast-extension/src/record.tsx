@@ -103,26 +103,48 @@ let activeRecordingProcess: any = null;
 let activeSessionId: string | null = null;
 
 export default function StartRecording() {
+  const prefs = getPreferenceValues<Preferences>();
   const [selectedQuality, setSelectedQuality] = useState<string>("professional");
   const [isRecording, setIsRecording] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [recordingStatus, setRecordingStatus] = useState<RecordingStatus | null>(null);
-  const [statusCheckInterval, setStatusCheckInterval] = useState<NodeJS.Timer | null>(null);
 
   // Monitor status file for real-time updates
   useEffect(() => {
-    if (isRecording && activeSessionId) {
-      const { projectPath } = getPreferenceValues<Preferences>();
-      const statusFile = path.join(projectPath, "storage", "status", `${activeSessionId}.json`);
+    if (isRecording && sessionId) {
+      const statusFile = path.join(prefs.projectPath, "storage", "status", `${sessionId}.json`);
+
+      console.log("[Record] Monitoring status file:", statusFile);
+      console.log("[Record] Session ID:", sessionId);
 
       const interval = setInterval(() => {
         try {
           if (fs.existsSync(statusFile)) {
             const content = fs.readFileSync(statusFile, "utf8");
             const status: RecordingStatus = JSON.parse(content);
-            setRecordingStatus(status);
+
+            // Only update state if status actually changed (prevents render loop)
+            setRecordingStatus((prev) => {
+              const hasChanged =
+                !prev ||
+                prev.status !== status.status ||
+                prev.elapsed !== status.elapsed ||
+                prev.progress !== status.progress;
+
+              if (hasChanged) {
+                console.log("[Record] Status updated:", {
+                  status: status.status,
+                  elapsed: status.elapsed,
+                  progress: status.progress,
+                });
+                return status;
+              }
+              return prev;
+            });
 
             // Check if completed or error
             if (status.status === "completed") {
+              console.log("[Record] Recording completed:", status.filename);
               setIsRecording(false);
               clearInterval(interval);
               showToast({
@@ -131,6 +153,7 @@ export default function StartRecording() {
                 message: `File saved: ${status.filename} (${status.file_size_mb} MB)`,
               });
             } else if (status.status === "error") {
+              console.error("[Record] Recording error:", status.error);
               setIsRecording(false);
               clearInterval(interval);
               showToast({
@@ -139,19 +162,20 @@ export default function StartRecording() {
                 message: status.error || "Unknown error",
               });
             }
+          } else {
+            console.log("[Record] Status file not found yet:", statusFile);
           }
         } catch (error) {
-          console.error("Error reading status file:", error);
+          console.error("[Record] Error reading status file:", error);
         }
       }, 500); // Check every 500ms for smooth updates
 
-      setStatusCheckInterval(interval);
-
       return () => {
+        console.log("[Record] Cleaning up status monitoring");
         if (interval) clearInterval(interval);
       };
     }
-  }, [isRecording, activeSessionId]);
+  }, [isRecording, sessionId, prefs.projectPath]);
 
   async function startRecording(quality: string, duration: number) {
     if (isRecording) {
@@ -166,27 +190,16 @@ export default function StartRecording() {
     try {
       setIsRecording(true);
 
-      const { pythonPath, projectPath } = getPreferenceValues<Preferences>();
-
       // Validate paths
-      if (!projectPath || !fs.existsSync(projectPath)) {
+      if (!prefs.projectPath || !fs.existsSync(prefs.projectPath)) {
         throw new Error("Invalid project path in preferences");
       }
 
       // Check if manual mode (duration = -1)
       const isManualMode = duration === -1;
 
-      const scriptPath = isManualMode
-        ? path.join(projectPath, "record_manual.py")
-        : path.join(projectPath, "record_with_status.py");
-
-      if (!fs.existsSync(scriptPath)) {
-        throw new Error(`Script not found: ${scriptPath}`);
-      }
-
-      // Generate session ID
-      const sessionId = `rec-${Date.now()}`;
-      activeSessionId = sessionId;
+      // Use the new CLI interface instead of standalone scripts
+      // No need to check for script existence - we'll use `python -m cli`
 
       const toastMessage = isManualMode
         ? `Manual mode - ${quality} quality`
@@ -198,16 +211,20 @@ export default function StartRecording() {
         message: toastMessage,
       });
 
-      // Start recording process
-      const args = isManualMode
-        ? ["start", quality, sessionId]
-        : [duration.toString(), quality, sessionId];
+      // Start recording process using the new CLI interface
+      // Command: python -m cli record <duration>
+      const args = ["-m", "cli", "record", duration.toString()];
 
-      const child = spawn(pythonPath, [scriptPath, ...args], {
-        cwd: projectPath,
+      console.log("[Record] Starting Python process:", prefs.pythonPath, args.join(" "));
+      console.log("[Record] Working directory:", prefs.projectPath);
+      console.log("[Record] PYTHONPATH:", path.join(prefs.projectPath, "src"));
+
+      const child = spawn(prefs.pythonPath, args, {
+        cwd: prefs.projectPath,
         windowsHide: true,
         detached: false,
         stdio: ["ignore", "pipe", "pipe"],
+        env: { ...process.env, PYTHONPATH: path.join(prefs.projectPath, "src") },
       });
 
       activeRecordingProcess = child;
@@ -217,6 +234,8 @@ export default function StartRecording() {
 
       child.stdout?.setEncoding("utf8");
       child.stdout?.on("data", (data) => {
+        console.log("[Record] Python stdout:", data.toString());
+
         if (!jsonReceived) {
           buffer += data.toString();
           const lines = buffer.split("\n");
@@ -226,15 +245,27 @@ export default function StartRecording() {
                 const parsed = JSON.parse(line.trim());
                 jsonReceived = true;
 
-                if (parsed.status === "success") {
+                console.log("[Record] Parsed JSON response:", parsed);
+
+                if (parsed.status === "success" && parsed.data?.session_id) {
+                  // Use the session_id from Python response
+                  const receivedSessionId = parsed.data.session_id;
+                  activeSessionId = receivedSessionId; // Keep for stopManualRecording
+                  setSessionId(receivedSessionId); // Trigger useEffect
+
+                  console.log("[Record] Session ID received:", receivedSessionId);
+
                   showToast({
                     style: Toast.Style.Success,
                     title: "Recording Started",
                     message: `Monitor progress below`,
                   });
+                } else {
+                  console.error("[Record] Unexpected JSON response:", parsed);
                 }
                 return;
               } catch (e) {
+                console.error("[Record] JSON parse error:", e);
                 // Continue reading
               }
             }
@@ -243,12 +274,14 @@ export default function StartRecording() {
       });
 
       child.stderr?.on("data", (data) => {
-        console.error("Recording error:", data.toString());
+        console.error("[Record] Python stderr:", data.toString());
       });
 
       child.on("error", (error) => {
+        console.error("[Record] Process error:", error);
         if (!jsonReceived) {
           setIsRecording(false);
+          setSessionId(null);
           showToast({
             style: Toast.Style.Failure,
             title: "Failed to Start",
@@ -258,11 +291,14 @@ export default function StartRecording() {
       });
 
       child.on("exit", (code) => {
+        console.log("[Record] Process exited with code:", code);
         setIsRecording(false);
+        setSessionId(null);
         activeRecordingProcess = null;
         activeSessionId = null;
 
         if (code !== 0 && !recordingStatus) {
+          console.error("[Record] Non-zero exit code without status");
           showToast({
             style: Toast.Style.Failure,
             title: "Recording Failed",
@@ -274,7 +310,9 @@ export default function StartRecording() {
       // Safety timeout
       setTimeout(() => {
         if (!jsonReceived) {
+          console.error("[Record] Timeout: No JSON response received within 8 seconds");
           setIsRecording(false);
+          setSessionId(null);
           showToast({
             style: Toast.Style.Failure,
             title: "Timeout",
@@ -284,6 +322,7 @@ export default function StartRecording() {
       }, 8000);
     } catch (error) {
       setIsRecording(false);
+      setSessionId(null);
       const errorMsg = error instanceof Error ? error.message : String(error);
       await showToast({
         style: Toast.Style.Failure,
@@ -298,20 +337,18 @@ export default function StartRecording() {
     if (!activeSessionId) return;
 
     try {
-      const { pythonPath, projectPath } = getPreferenceValues<Preferences>();
-      const scriptPath = path.join(projectPath, "record_manual.py");
-
       await showToast({
         style: Toast.Style.Animated,
         title: "Stopping Recording",
         message: "Finalizing audio file...",
       });
 
-      // Call stop command
-      spawn(pythonPath, [scriptPath, "stop", activeSessionId], {
-        cwd: projectPath,
-        windowsHide: true,
-      });
+      // Note: The new CLI doesn't support manual stop yet
+      // The recording will complete based on the duration specified
+      // For now, just kill the process if it's still running
+      if (activeRecordingProcess && !activeRecordingProcess.killed) {
+        activeRecordingProcess.kill();
+      }
 
       // Wait a bit for stop signal to be processed
       setTimeout(() => {

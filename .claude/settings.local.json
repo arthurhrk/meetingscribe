@@ -35,7 +35,24 @@
       "Bash(./venv/Scripts/python.exe:*)",
       "Bash(where:*)",
       "Bash(del record-old.tsx recent-old.tsx)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(mkdir:*)",
+      "Bash(git mv:*)",
+      "Bash(if [ -d logs ])",
+      "Bash(then cp -r logs/* storage/logs/)",
+      "Bash(fi)",
+      "Bash(.venv/Scripts/python.exe:*)",
+      "Bash(npm run lint)",
+      "Bash(set PYTHONPATH=src:*)",
+      "Bash(.venvScriptspython.exe -m cli.main record 5)",
+      "Bash(PYTHONPATH=src ./venv/Scripts/python.exe:*)",
+      "Bash(find:*)",
+      "Bash(for file in recent.tsx status.tsx import-google.tsx)",
+      "Bash(do echo \"=== $file ===\")",
+      "Bash(done)",
+      "Bash(.venvScriptspython.exe -m cli record 10)",
+      "Bash(git checkout:*)",
+      "Bash(git log:*)"
     ],
     "deny": []
   }

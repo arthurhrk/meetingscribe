@@ -67,9 +67,8 @@ venv.bak/
 *.ogg
 *.wma
 
-# Storage directories
-storage/recordings/*
-!storage/recordings/.gitkeep
+# Storage
+/storage/
 
 # Logs
 logs/*.log
@@ -92,6 +91,12 @@ Thumbs.db
 # VSCode
 .vscode/
 
+# IDE-specific
+.idea/
+
+# Claude-specific
+**/.claude/
+
 # Temporary files
 *.tmp
 *.temp
@@ -100,3 +105,6 @@ Thumbs.db
 # Backup files
 *.bak
 *.backup
+
+# Raycast
+/raycast-extension/node_modules/

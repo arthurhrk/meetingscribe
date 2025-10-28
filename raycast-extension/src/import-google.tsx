@@ -57,6 +57,30 @@ export default function ImportGoogle() {
     }
   }, []);
 
+  function getTranscriptPath(audioFilePath: string): string {
+    const transcriptDir = path.join(prefs.projectPath, "storage", "transcriptions");
+    const baseName = path.basename(audioFilePath, path.extname(audioFilePath));
+    return path.join(transcriptDir, `${baseName}.md`);
+  }
+
+  function hasTranscript(audioFilePath: string): boolean {
+    const transcriptPath = getTranscriptPath(audioFilePath);
+    return fs.existsSync(transcriptPath);
+  }
+
+  function openTranscript(audioFilePath: string) {
+    const transcriptPath = getTranscriptPath(audioFilePath);
+    if (fs.existsSync(transcriptPath)) {
+      open(transcriptPath);
+    } else {
+      showToast({
+        style: Toast.Style.Failure,
+        title: "Transcript Not Found",
+        message: "Please transcribe this audio file first",
+      });
+    }
+  }
+
   async function transcribe(entry: AudioEntry) {
     try {
       if (!prefs.geminiApiKey) {
@@ -102,22 +126,36 @@ export default function ImportGoogle() {
   return (
     <List isLoading={isLoading} searchBarPlaceholder="Select an audio file to transcribe with Gemini">
       <List.Section title={`${items.length} Audio File${items.length !== 1 ? "s" : ""}`}>
-        {items.map((it) => (
-          <List.Item
-            key={it.filePath}
-            title={it.name}
-            subtitle={it.size}
-            icon={Icon.Waveform}
-            accessories={[{ date: it.mtime, tooltip: "Modified" }]}
-            actions={
-              <ActionPanel>
-                <Action title="Transcribe with Google Gemini" icon={Icon.SpeechBubble} onAction={() => transcribe(it)} />
-                <Action.OpenWith path={it.filePath} title="Open With..." />
-                <Action.ShowInFinder path={it.filePath} />
-              </ActionPanel>
-            }
-          />
-        ))}
+        {items.map((it) => {
+          const transcriptExists = hasTranscript(it.filePath);
+          return (
+            <List.Item
+              key={it.filePath}
+              title={it.name}
+              subtitle={it.size}
+              icon={Icon.Waveform}
+              accessories={[
+                { date: it.mtime, tooltip: "Modified" },
+                ...(transcriptExists ? [{ icon: Icon.Document, tooltip: "Transcription available" }] : []),
+              ]}
+              actions={
+                <ActionPanel>
+                  <Action title="Transcribe with Google Gemini" icon={Icon.SpeechBubble} onAction={() => transcribe(it)} />
+                  {transcriptExists && (
+                    <Action
+                      title="Open Transcript"
+                      icon={Icon.Document}
+                      shortcut={{ modifiers: ["cmd"], key: "t" }}
+                      onAction={() => openTranscript(it.filePath)}
+                    />
+                  )}
+                  <Action.OpenWith path={it.filePath} title="Open With..." />
+                  <Action.ShowInFinder path={it.filePath} />
+                </ActionPanel>
+              }
+            />
+          );
+        })}
       </List.Section>
     </List>
   );

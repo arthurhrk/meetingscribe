@@ -18,7 +18,7 @@ from typing import Optional, Callable, Dict, Any
 from dataclasses import dataclass, field
 
 from loguru import logger
-from src.audio.devices import DeviceManager, AudioDevice, AudioDeviceError
+from .devices import DeviceManager, AudioDevice, AudioDeviceError
 
 try:
     import pyaudiowpatch as pyaudio
@@ -394,6 +394,13 @@ class AudioRecorder:
             logger.error(f"Erro crítico na thread de gravação: {e}")
             
         finally:
+            if self._stream and not self._stream.is_stopped():
+                try:
+                    self._stream.stop_stream()
+                    self._stream.close()
+                    logger.debug("Stream de áudio fechado pela thread de gravação")
+                except Exception as e:
+                    logger.warning(f"Erro ao fechar stream na thread: {e}")
             logger.debug("Thread de gravação finalizada")
     
     def stop_recording(self) -> RecordingStats:
@@ -422,16 +429,8 @@ class AudioRecorder:
             if self._recording_thread.is_alive():
                 logger.warning("Thread de gravação não finalizou no tempo esperado")
         
-        # Fechar stream
-        if self._stream:
-            try:
-                self._stream.stop_stream()
-                self._stream.close()
-                logger.debug("Stream de áudio fechado")
-            except Exception as e:
-                logger.warning(f"Erro ao fechar stream: {e}")
-            finally:
-                self._stream = None
+        # Fechar stream (movido para _recording_worker)
+        self._stream = None
         
         # Finalizar estatísticas
         self._stats.end_time = datetime.now()

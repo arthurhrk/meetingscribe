@@ -238,8 +238,10 @@ export default function RecentRecordings() {
       return;
     }
 
+    const transcriptDir = path.join(projectPath, "storage", "transcriptions");
+    const transcriptPath = path.join(transcriptDir, recording.filename.replace(".wav", ".md"));
+
     // Check if transcription already exists
-    const transcriptPath = recording.fullPath.replace(".wav", "_transcription.txt");
     const hasTranscript = fs.existsSync(transcriptPath);
 
     if (hasTranscript) {
@@ -263,15 +265,20 @@ export default function RecentRecordings() {
       message: recording.filename,
     });
 
+    console.log(`[Transcription] Starting for: ${recording.fullPath}`);
+
     try {
-      const scriptPath = path.join(projectPath, "transcribe_audio.py");
+      const scriptPath = path.join(projectPath, "scripts", "import_google.py");
+
       const args = [
         scriptPath,
         recording.fullPath,
         "--api-key",
         geminiApiKey,
         "--model",
-        geminiModel || "models/gemini-2.0-flash-exp",
+        geminiModel || "models/gemini-1.5-flash",
+        "--output-file",
+        transcriptPath,
       ];
 
       if (optimizeAudio) {
@@ -294,6 +301,10 @@ export default function RecentRecordings() {
       });
 
       process.on("close", (code) => {
+        console.log(`[Transcription] Process exited with code: ${code}`);
+        if (stdout) console.log(`[Transcription] stdout: ${stdout}`);
+        if (stderr) console.log(`[Transcription] stderr: ${stderr}`);
+
         if (code === 0) {
           try {
             const result = JSON.parse(stdout);
@@ -322,6 +333,7 @@ export default function RecentRecordings() {
       });
 
       process.on("error", (error) => {
+        console.error(`[Transcription] Process error: ${error.message}`);
         toast.style = Toast.Style.Failure;
         toast.title = "Error starting transcription";
         toast.message = error.message;
@@ -334,7 +346,8 @@ export default function RecentRecordings() {
   }
 
   function openTranscript(recording: Recording) {
-    const transcriptPath = recording.fullPath.replace(".wav", "_transcription.txt");
+    const transcriptDir = path.join(getPreferenceValues<Preferences>().projectPath, "storage", "transcriptions");
+    const transcriptPath = path.join(transcriptDir, recording.filename.replace(".wav", ".md"));
     if (fs.existsSync(transcriptPath)) {
       open(transcriptPath);
     } else {
@@ -362,7 +375,8 @@ export default function RecentRecordings() {
     <List isLoading={isLoading} searchBarPlaceholder="Search recordings...">
       <List.Section title={`${recordings.length} Recording${recordings.length !== 1 ? "s" : ""}`}>
         {recordings.map((recording) => {
-          const transcriptPath = recording.fullPath.replace(".wav", "_transcription.txt");
+          const transcriptDir = path.join(projectPath, "storage", "transcriptions");
+          const transcriptPath = path.join(transcriptDir, recording.filename.replace(".wav", ".md"));
           const hasTranscript = fs.existsSync(transcriptPath);
 
           return (

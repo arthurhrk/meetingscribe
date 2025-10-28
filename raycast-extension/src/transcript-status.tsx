@@ -52,15 +52,17 @@ export default function TranscriptStatus() {
   function loadTranscriptions() {
     try {
       setIsLoading(true);
+      console.log("[TranscriptStatus] Loading transcriptions...");
 
-      const recordingsDir = path.join(projectPath, "storage", "recordings");
+      const transcriptionsDir = path.join(projectPath, "storage", "transcriptions");
 
       // Check if directory exists
-      if (!fs.existsSync(recordingsDir)) {
+      if (!fs.existsSync(transcriptionsDir)) {
+        console.log("[TranscriptStatus] Transcriptions directory not found.");
         showToast({
           style: Toast.Style.Failure,
-          title: "Recordings folder not found",
-          message: "No recordings directory exists yet",
+          title: "Transcriptions folder not found",
+          message: "No transcriptions directory exists yet",
         });
         setTranscriptions([]);
         setIsLoading(false);
@@ -69,15 +71,15 @@ export default function TranscriptStatus() {
 
       // Find all transcription files
       const files = fs
-        .readdirSync(recordingsDir)
-        .filter((f) => f.endsWith("_transcription.txt"))
+        .readdirSync(transcriptionsDir)
+        .filter((f) => f.endsWith(".md"))
         .map((filename) => {
-          const transcriptPath = path.join(recordingsDir, filename);
+          const transcriptPath = path.join(transcriptionsDir, filename);
           const transcriptStats = fs.statSync(transcriptPath);
 
           // Derive audio filename
-          const audioFilename = filename.replace("_transcription.txt", ".wav");
-          const audioPath = path.join(recordingsDir, audioFilename);
+          const audioFilename = filename.replace(".md", ".wav");
+          const audioPath = path.join(projectPath, "storage", "recordings", audioFilename);
           const hasAudio = fs.existsSync(audioPath);
 
           let audioStats: fs.Stats | null = null;
@@ -101,9 +103,11 @@ export default function TranscriptStatus() {
         })
         .sort((a, b) => b.createdDate.getTime() - a.createdDate.getTime()); // Newest first
 
+      console.log(`[TranscriptStatus] Found ${files.length} transcriptions.`);
       setTranscriptions(files);
       setIsLoading(false);
     } catch (error) {
+      console.error("[TranscriptStatus] Error loading transcriptions:", error);
       showToast({
         style: Toast.Style.Failure,
         title: "Error loading transcriptions",
