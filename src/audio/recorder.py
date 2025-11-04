@@ -1,8 +1,8 @@
 """
-Audio Recorder para MeetingScribe
+Audio Recorder for MeetingScribe
 
-Módulo responsável pela gravação de áudio usando dispositivos WASAPI loopback.
-Permite captura de áudio do sistema para transcrição posterior.
+Module responsible for audio recording using WASAPI loopback devices.
+Enables system audio capture for subsequent transcription.
 
 Author: MeetingScribe Team
 Version: 1.0.0
@@ -12,6 +12,7 @@ Python: >=3.8
 import wave
 import threading
 import time
+import struct
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Callable, Dict, Any
@@ -21,16 +22,28 @@ from loguru import logger
 from .devices import DeviceManager, AudioDevice, AudioDeviceError
 
 try:
+    import numpy as np
+    NUMPY_AVAILABLE = True
+except ImportError:
+    NUMPY_AVAILABLE = False
+
+try:
+    from pydub import AudioSegment
+    PYDUB_AVAILABLE = True
+except ImportError:
+    PYDUB_AVAILABLE = False
+
+try:
     import pyaudiowpatch as pyaudio
     PYAUDIO_AVAILABLE = True
 except ImportError:
     try:
         import pyaudio
         PYAUDIO_AVAILABLE = True
-        logger.warning("Usando pyaudio padrão - funcionalidades WASAPI limitadas")
+        logger.warning("Using standard pyaudio - WASAPI features limited")
     except ImportError:
         PYAUDIO_AVAILABLE = False
-        logger.error("PyAudio não disponível")
+        logger.error("PyAudio not available")
 
 
 # Recording Quality Presets
@@ -97,16 +110,17 @@ class RecordingQuality:
 @dataclass
 class RecordingConfig:
     """
-    Configuração para gravação de áudio.
+    Configuration for audio recording.
 
     Attributes:
-        device: Dispositivo de áudio para gravação
-        sample_rate: Taxa de amostragem em Hz
-        channels: Número de canais de áudio
-        chunk_size: Tamanho do buffer em frames
-        format: Formato de áudio PyAudio
-        max_duration: Duração máxima em segundos (None = sem limite)
-        output_dir: Diretório para salvar gravações
+        device: Audio device for recording
+        sample_rate: Sample rate in Hz
+        channels: Number of audio channels
+        chunk_size: Buffer size in frames
+        format: PyAudio audio format
+        max_duration: Maximum duration in seconds (None = unlimited)
+        output_dir: Directory to save recordings
+        audio_format: File format ('wav' or 'm4a')
     """
     device: AudioDevice
     sample_rate: int = 48000  # Professional quality
@@ -115,20 +129,21 @@ class RecordingConfig:
     format: int = pyaudio.paInt16 if PYAUDIO_AVAILABLE else None
     max_duration: Optional[int] = None
     output_dir: Path = field(default_factory=lambda: Path("storage/recordings"))
+    audio_format: str = "wav"  # 'wav' or 'm4a'
 
 
 @dataclass
 class RecordingStats:
     """
-    Estatísticas de uma gravação.
-    
+    Statistics from a recording.
+
     Attributes:
-        start_time: Timestamp de início
-        end_time: Timestamp de fim
-        duration: Duração em segundos
-        file_size: Tamanho do arquivo em bytes
-        samples_recorded: Total de samples gravados
-        filename: Nome do arquivo gerado
+        start_time: Start timestamp
+        end_time: End timestamp
+        duration: Duration in seconds
+        file_size: File size in bytes
+        samples_recorded: Total samples recorded
+        filename: Generated filename
     """
     start_time: datetime
     end_time: Optional[datetime] = None
@@ -139,38 +154,38 @@ class RecordingStats:
 
 
 class AudioRecorderError(Exception):
-    """Exceção customizada para erros do gravador de áudio."""
+    """Custom exception for audio recorder errors."""
     pass
 
 
 class RecordingInProgressError(AudioRecorderError):
-    """Exceção para quando uma gravação já está em progresso."""
+    """Exception for when a recording is already in progress."""
     pass
 
 
 class AudioRecorder:
     """
-    Gravador de áudio para captura de sistema usando WASAPI loopback.
-    
-    Permite gravação contínua de áudio do sistema com controle de início/parada,
-    monitoramento de progresso e estatísticas detalhadas.
+    Audio recorder for system audio capture using WASAPI loopback.
+
+    Enables continuous system audio recording with start/stop control,
+    progress monitoring, and detailed statistics.
     """
     
     def __init__(self, config: Optional[RecordingConfig] = None):
         """
-        Inicializa o gravador de áudio.
-        
+        Initialize the audio recorder.
+
         Args:
-            config: Configuração de gravação. Se None, usa configuração padrão.
-            
+            config: Recording configuration. If None, uses default configuration.
+
         Raises:
-            AudioRecorderError: Se não conseguir inicializar o sistema de áudio
+            AudioRecorderError: If unable to initialize audio system
         """
         if not PYAUDIO_AVAILABLE:
             raise AudioRecorderError(
-                "PyAudio não disponível. Instale: pip install pyaudiowpatch"
+                "PyAudio not available. Install: pip install pyaudiowpatch"
             )
-        
+
         self._config = config
         self._audio = None
         self._stream = None
@@ -179,120 +194,133 @@ class AudioRecorder:
         self._frames = []
         self._stats = None
         self._progress_callback = None
-        
+        self._frames_captured = 0
+        self._has_audio_detected = False
+        self._audio_threshold = 100  # RMS threshold for silence detection
+
         self._initialize_audio_system()
     
     def _initialize_audio_system(self) -> None:
         """
-        Inicializa o sistema de áudio PyAudio.
-        
+        Initialize the PyAudio audio system.
+
         Raises:
-            AudioRecorderError: Se não conseguir inicializar
+            AudioRecorderError: If unable to initialize
         """
         try:
             self._audio = pyaudio.PyAudio()
-            logger.info("Sistema de áudio para gravação inicializado")
+            logger.info("Audio system for recording initialized")
         except Exception as e:
-            logger.error(f"Falha ao inicializar sistema de áudio: {e}")
-            raise AudioRecorderError(f"Não foi possível inicializar PyAudio: {e}") from e
+            logger.error(f"Failed to initialize audio system: {e}")
+            raise AudioRecorderError(f"Could not initialize PyAudio: {e}") from e
     
     def set_device_auto(self) -> bool:
         """
-        Configura automaticamente o melhor dispositivo disponível.
-        
+        Automatically configure the best available device.
+
         Returns:
-            bool: True se conseguiu configurar um dispositivo
+            bool: True if successfully configured a device
         """
         try:
             with DeviceManager() as dm:
-                # Usar função específica para dispositivos adequados para gravação
+                # Use specific function for devices capable of recording
                 recording_devices = dm.get_recording_capable_devices()
-                
+
                 if recording_devices:
-                    # Pegar o primeiro dispositivo adequado (já ordenado por preferência)
+                    # Get the first suitable device (already sorted by preference)
                     device = recording_devices[0]
-                    
-                    # Verificar se tem canais de entrada válidos
+
+                    # Check if it has valid input channels
                     if device.max_input_channels == 0:
-                        logger.warning(f"Dispositivo {device.name} não tem canais de entrada, procurando alternativa...")
-                        
-                        # Procurar por dispositivos com canais de entrada válidos
+                        logger.warning(f"Device {device.name} has no input channels, searching for alternative...")
+
+                        # Search for devices with valid input channels
                         valid_devices = [d for d in recording_devices if d.max_input_channels > 0]
                         if valid_devices:
                             device = valid_devices[0]
                         else:
-                            logger.error("Nenhum dispositivo com canais de entrada válidos encontrado")
+                            logger.error("No device with valid input channels found")
                             return False
-                    
+
                     channels = min(device.max_input_channels, 2) if device.max_input_channels > 0 else 1
-                    
+
                     self._config = RecordingConfig(
                         device=device,
                         sample_rate=int(device.default_sample_rate),
                         channels=channels
                     )
-                    
-                    logger.info(f"Dispositivo configurado automaticamente: {device.name} (canais: {channels})")
+
+                    logger.info(f"Device configured automatically: {device.name} (channels: {channels})")
                     return True
-                
-                logger.warning("Nenhum dispositivo adequado para gravação encontrado")
+
+                logger.warning("No suitable device for recording found")
                 return False
-                
+
         except Exception as e:
-            logger.error(f"Erro ao configurar dispositivo automaticamente: {e}")
+            logger.error(f"Error configuring device automatically: {e}")
             return False
     
-    def start_recording(self, filename: Optional[str] = None, 
+    def start_recording(self, filename: Optional[str] = None,
                        progress_callback: Optional[Callable[[float], None]] = None) -> str:
         """
-        Inicia uma nova gravação.
-        
+        Start a new recording.
+
         Args:
-            filename: Nome do arquivo (sem extensão). Se None, usa timestamp.
-            progress_callback: Callback chamado com duração atual em segundos
-            
+            filename: Filename (without extension). If None, uses timestamp.
+            progress_callback: Callback called with current duration in seconds
+
         Returns:
-            str: Caminho completo do arquivo que será criado
-            
+            str: Full path of the file that will be created
+
         Raises:
-            RecordingInProgressError: Se já houver gravação em andamento
-            AudioRecorderError: Se não conseguir iniciar gravação
+            RecordingInProgressError: If a recording is already in progress
+            AudioRecorderError: If unable to start recording
         """
         if self._recording:
-            raise RecordingInProgressError("Gravação já está em progresso")
-        
+            raise RecordingInProgressError("Recording is already in progress")
+
         if not self._config:
-            logger.info("Configuração não definida, detectando automaticamente...")
+            logger.info("Configuration not defined, detecting automatically...")
             if not self.set_device_auto():
-                raise AudioRecorderError("Não foi possível configurar dispositivo de áudio")
-        
-        # Gerar nome do arquivo
+                raise AudioRecorderError("Could not configure audio device")
+
+        # Generate filename
         if not filename:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"meeting_{timestamp}"
-        
-        # Garantir extensão .wav
-        if not filename.endswith('.wav'):
-            filename += '.wav'
-        
-        # Criar caminho completo
+
+        # Ensure correct extension based on format
+        audio_format = self._config.audio_format.lower()
+        expected_ext = f".{audio_format}"
+
+        # Remove old extension if exists
+        for ext in ['.wav', '.m4a', '.mp4']:
+            if filename.endswith(ext):
+                filename = filename[:-len(ext)]
+                break
+
+        # Add correct extension
+        if not filename.endswith(expected_ext):
+            filename += expected_ext
+
+        # Create full path
         self._config.output_dir.mkdir(parents=True, exist_ok=True)
         filepath = self._config.output_dir / filename
-        
-        # Configurar callback de progresso
+
+        # Configure progress callback
         self._progress_callback = progress_callback
-        
-        # Inicializar estatísticas
+
+        # Initialize statistics
         self._stats = RecordingStats(
             start_time=datetime.now(),
             filename=str(filepath)
         )
-        
-        # Limpar frames anteriores
+
+        # Clear previous frames
         self._frames = []
-        
+
         try:
-            # Abrir stream de áudio com configuração específica para loopback
+            # Open audio stream with specific configuration for loopback
             stream_config = {
                 'format': self._config.format,
                 'channels': self._config.channels,
@@ -301,211 +329,363 @@ class AudioRecorder:
                 'input_device_index': self._config.device.index,
                 'frames_per_buffer': self._config.chunk_size
             }
-            
-            # Configuração especial para dispositivos WASAPI loopback
+
+            # Special configuration for WASAPI loopback devices
             if hasattr(self._config.device, 'is_loopback') and self._config.device.is_loopback:
-                logger.debug("Configurando stream para dispositivo WASAPI loopback")
-                # Para pyaudiowpatch, dispositivos loopback não precisam do parâmetro as_loopback
-                # O device index já identifica o dispositivo loopback correto
-            
-            logger.debug(f"Configuração do stream: {stream_config}")
+                logger.debug("Configuring stream for WASAPI loopback device")
+                # For pyaudiowpatch, loopback devices don't need the as_loopback parameter
+                # The device index already identifies the correct loopback device
+
+            logger.debug(f"Stream configuration: {stream_config}")
             self._stream = self._audio.open(**stream_config)
-            
-            logger.info(f"Stream de áudio aberto para dispositivo {self._config.device.name}")
-            
-            # Iniciar thread de gravação
+
+            logger.info(f"Audio stream opened for device {self._config.device.name}")
+
+            # Start recording thread
             self._recording = True
             self._recording_thread = threading.Thread(target=self._recording_worker)
             self._recording_thread.daemon = True
             self._recording_thread.start()
-            
-            logger.info(f"Gravação iniciada: {filepath}")
-            
+
+            logger.info(f"Recording started: {filepath}")
+
             return str(filepath)
-            
+
         except Exception as e:
-            logger.error(f"Erro ao iniciar gravação: {e}")
+            logger.error(f"Error starting recording: {e}")
             self._cleanup_recording()
-            raise AudioRecorderError(f"Falha ao iniciar gravação: {e}") from e
-    
+            raise AudioRecorderError(f"Failed to start recording: {e}") from e
+
+    def _calculate_audio_level(self, data: bytes) -> float:
+        """
+        Calculate the RMS (Root Mean Square) level of audio.
+
+        Args:
+            data: Audio data in bytes (Int16 format)
+
+        Returns:
+            float: RMS level of the audio
+        """
+        import struct
+        try:
+            # Convert bytes to list of samples (Int16)
+            samples = struct.unpack(f'<{len(data)//2}h', data)
+
+            # Calculate RMS (Root Mean Square)
+            if samples:
+                sum_of_squares = sum(s ** 2 for s in samples)
+                rms = (sum_of_squares / len(samples)) ** 0.5
+                return rms
+            return 0.0
+        except Exception as e:
+            logger.debug(f"Error calculating audio level: {e}")
+            return 0.0
+
     def _recording_worker(self) -> None:
         """
-        Worker thread que realiza a gravação contínua.
+        Worker thread that performs continuous recording.
         """
-        logger.debug("Thread de gravação iniciada")
-        
+        logger.debug("Recording thread started")
+
         try:
             start_time = time.time()
-            
+
             while self._recording:
-                # Verificar limite de duração
+                # Check duration limit
                 current_time = time.time()
                 duration = current_time - start_time
-                
-                if (self._config.max_duration and 
+
+                if (self._config.max_duration and
                     duration >= self._config.max_duration):
-                    logger.info(f"Duração máxima atingida: {self._config.max_duration}s")
+                    logger.info(f"Maximum duration reached: {self._config.max_duration}s")
                     self._recording = False
                     break
-                
-                # Ler dados do stream
+
+                # Read data from stream
                 try:
                     if not self._stream or self._stream.is_stopped():
-                        logger.error("Stream de áudio foi interrompido")
+                        logger.error("Audio stream was interrupted")
                         break
-                    
-                    # Tentar ler com timeout para evitar travamento
+
+                    # Try to read with timeout to avoid freezing
                     try:
                         data = self._stream.read(self._config.chunk_size, exception_on_overflow=False)
-                        # logger.debug(f"Dados lidos do stream: {len(data)} bytes")
+                        # logger.debug(f"Data read from stream: {len(data)} bytes")
                     except OSError as e:
-                        logger.error(f"Erro OSError na leitura do stream: {e}")
+                        logger.error(f"OSError while reading from stream: {e}")
                         if "unanticipated host error" in str(e) or "device unavailable" in str(e):
-                            logger.error("Dispositivo WASAPI não disponível, parando gravação")
+                            logger.error("WASAPI device not available, stopping recording")
                             break
                         raise
-                    
+
                     if len(data) > 0:
                         self._frames.append(data)
+                        self._frames_captured += 1
                         self._stats.samples_recorded += self._config.chunk_size
-                        # logger.debug(f"Total de frames gravados: {len(self._frames)}")
+
+                        # Detect audio (check once)
+                        if not self._has_audio_detected:
+                            audio_level = self._calculate_audio_level(data)
+                            if audio_level > self._audio_threshold:
+                                self._has_audio_detected = True
+                                logger.info(f"Audio detected! Level: {audio_level:.2f}")
                     else:
-                        logger.warning("Nenhum dado capturado do stream de áudio")
-                    
-                    # Chamar callback de progresso
+                        logger.warning("No data captured from audio stream")
+
+                    # Call progress callback
                     if self._progress_callback:
                         try:
                             self._progress_callback(duration)
                         except Exception as e:
-                            logger.warning(f"Erro no callback de progresso: {e}")
-                    
-                    # Pequena pausa para evitar 100% CPU
-                    time.sleep(0.05)  # Mais tempo de pausa para reduzir carga
-                    
+                            logger.warning(f"Error in progress callback: {e}")
+
+                    # Small pause to avoid 100% CPU usage
+                    time.sleep(0.05)  # More pause time to reduce load
+
                 except Exception as e:
-                    logger.warning(f"Erro ao ler dados de áudio: {e}")
-                    # Se o erro é crítico, parar a gravação
+                    logger.warning(f"Error reading audio data: {e}")
+                    # If error is critical, stop recording
                     if "invalid" in str(e).lower() or "closed" in str(e).lower():
-                        logger.error("Stream inválido, parando gravação")
+                        logger.error("Stream invalid, stopping recording")
                         break
-                    # Continuar gravação para outros tipos de erro
-                    
+                    # Continue recording for other types of errors
+
         except Exception as e:
-            logger.error(f"Erro crítico na thread de gravação: {e}")
-            
+            logger.error(f"Critical error in recording thread: {e}")
+
         finally:
             if self._stream and not self._stream.is_stopped():
                 try:
                     self._stream.stop_stream()
                     self._stream.close()
-                    logger.debug("Stream de áudio fechado pela thread de gravação")
+                    logger.debug("Audio stream closed by recording thread")
                 except Exception as e:
-                    logger.warning(f"Erro ao fechar stream na thread: {e}")
-            logger.debug("Thread de gravação finalizada")
+                    logger.warning(f"Error closing stream in thread: {e}")
+            logger.debug("Recording thread finished")
     
     def stop_recording(self) -> RecordingStats:
         """
-        Para a gravação atual e salva o arquivo.
+        Stop the current recording and save the file.
 
         Returns:
-            RecordingStats: Estatísticas da gravação
+            RecordingStats: Recording statistics
 
         Raises:
-            AudioRecorderError: Se não houver gravação em andamento ou erro ao salvar
+            AudioRecorderError: If no recording is in progress or error saving
         """
-        # Verificar se há dados para salvar (ao invés de verificar _recording flag)
-        # Porque max_duration pode ter setado _recording = False mas ainda precisa salvar
+        # Check if there is data to save (instead of checking _recording flag)
+        # Because max_duration may have set _recording = False but still needs to save
         if not self._frames and not self._stats:
-            raise AudioRecorderError("Nenhuma gravação para salvar")
+            raise AudioRecorderError("No recording to save")
 
-        logger.info("Parando gravação...")
-        
-        # Parar gravação
+        logger.info("Stopping recording...")
+
+        # Stop recording
         self._recording = False
-        
-        # Aguardar thread finalizar
+
+        # Wait for thread to finish
         if self._recording_thread:
             self._recording_thread.join(timeout=5.0)
             if self._recording_thread.is_alive():
-                logger.warning("Thread de gravação não finalizou no tempo esperado")
-        
-        # Fechar stream (movido para _recording_worker)
+                logger.warning("Recording thread did not finish in the expected time")
+
+        # Close stream (moved to _recording_worker)
         self._stream = None
-        
-        # Finalizar estatísticas
+
+        # Finalize statistics
         self._stats.end_time = datetime.now()
         self._stats.duration = (self._stats.end_time - self._stats.start_time).total_seconds()
-        
-        # Salvar arquivo
+
+        # Save file
         try:
             self._save_recording()
-            logger.info(f"Gravação salva: {self._stats.filename}")
+            logger.info(f"Recording saved: {self._stats.filename}")
         except Exception as e:
-            logger.error(f"Erro ao salvar gravação: {e}")
-            raise AudioRecorderError(f"Falha ao salvar arquivo: {e}") from e
-        
+            logger.error(f"Error saving recording: {e}")
+            raise AudioRecorderError(f"Failed to save file: {e}") from e
+
         return self._stats
     
     def _save_recording(self) -> None:
         """
-        Salva os frames gravados em arquivo WAV.
-        
+        Save recorded frames to file (WAV or M4A).
+
         Raises:
-            AudioRecorderError: Se não conseguir salvar o arquivo
+            AudioRecorderError: If unable to save file
         """
-        logger.debug(f"Tentando salvar gravação com {len(self._frames)} frames")
+        logger.debug(f"Attempting to save recording with {len(self._frames)} frames")
         if not self._frames:
-            raise AudioRecorderError("Nenhum dado de áudio para salvar")
-        
+            raise AudioRecorderError("No audio data to save")
+
         try:
-            with wave.open(self._stats.filename, 'wb') as wav_file:
-                wav_file.setnchannels(self._config.channels)
-                wav_file.setsampwidth(self._audio.get_sample_size(self._config.format))
-                wav_file.setframerate(self._config.sample_rate)
-                wav_file.writeframes(b''.join(self._frames))
-            
-            # Atualizar estatísticas
+            audio_format = self._config.audio_format.lower() if self._config.audio_format else "wav"
+            logger.debug(f"Saving in format: {audio_format}")
+
+            if audio_format == "m4a":
+                logger.debug(f"Using M4A method for {self._stats.filename}")
+                self._save_as_m4a()
+            else:
+                logger.debug(f"Using WAV method for {self._stats.filename}")
+                self._save_as_wav()
+
+            # Update statistics
             file_path = Path(self._stats.filename)
             self._stats.file_size = file_path.stat().st_size
-            
-            logger.debug(f"Arquivo WAV salvo: {self._stats.file_size} bytes")
-            
+
+            logger.debug(f"File {self._config.audio_format.upper()} saved: {self._stats.file_size} bytes")
+
         except Exception as e:
-            logger.error(f"Erro ao salvar arquivo WAV: {e}")
-            raise AudioRecorderError(f"Falha ao escrever arquivo: {e}") from e
+            logger.error(f"Error saving file: {e}")
+            raise AudioRecorderError(f"Failed to write file: {e}") from e
+
+    def _save_as_wav(self) -> None:
+        """
+        Save recorded frames to WAV file.
+
+        Raises:
+            Exception: If unable to save file
+        """
+        with wave.open(self._stats.filename, 'wb') as wav_file:
+            wav_file.setnchannels(self._config.channels)
+            wav_file.setsampwidth(self._audio.get_sample_size(self._config.format))
+            wav_file.setframerate(self._config.sample_rate)
+            wav_file.writeframes(b''.join(self._frames))
+
+        logger.debug(f"WAV file saved: {self._stats.filename}")
+
+    def _save_as_m4a(self) -> None:
+        """
+        Save recorded frames to M4A file (AAC compressed).
+
+        Raises:
+            Exception: If unable to save file
+        """
+        if not PYDUB_AVAILABLE:
+            logger.error("pydub not available for M4A encoding")
+            raise AudioRecorderError(
+                "pydub not available for M4A encoding. Install with: pip install pydub"
+            )
+
+        try:
+            logger.debug(f"Starting M4A encoding with pydub for {self._stats.filename}")
+            logger.debug(f"Configuration: {self._config.channels} channels, {self._config.sample_rate}Hz, {len(self._frames)} frames")
+
+            # Convert bytes to AudioSegment
+            audio_data = b''.join(self._frames)
+            logger.debug(f"Audio data: {len(audio_data)} bytes")
+
+            audio = AudioSegment(
+                audio_data,
+                sample_width=self._audio.get_sample_size(self._config.format),
+                frame_rate=self._config.sample_rate,
+                channels=self._config.channels
+            )
+
+            logger.debug(f"AudioSegment created: {len(audio)}ms duration")
+
+            # Export as M4A
+            logger.debug(f"Exporting to M4A with AAC @ 256k")
+            audio.export(
+                self._stats.filename,
+                format="mp4",  # pydub uses "mp4" format for M4A/AAC
+                codec="aac",
+                bitrate="256k"
+            )
+
+            logger.info(f"M4A file saved successfully: {self._stats.filename}")
+
+        except ImportError as e:
+            logger.error(f"Import error when saving M4A (ffmpeg not installed?): {e}")
+            raise AudioRecorderError(
+                f"Failed to encode M4A. Check if ffmpeg is installed: {e}"
+            )
+        except Exception as e:
+            logger.error(f"Error saving M4A: {type(e).__name__}: {e}")
+            raise AudioRecorderError(f"Failed to save M4A file: {e}") from e
     
     def is_recording(self) -> bool:
         """
-        Verifica se há gravação em andamento.
-        
+        Check if a recording is in progress.
+
         Returns:
-            bool: True se estiver gravando
+            bool: True if recording
         """
         return self._recording
-    
+
+    def get_device_name(self) -> Optional[str]:
+        """
+        Get the name of the device being used.
+
+        Returns:
+            str: Device name
+        """
+        if self._config and self._config.device:
+            return self._config.device.name
+        return None
+
+    def get_sample_rate(self) -> Optional[int]:
+        """
+        Get the sample rate.
+
+        Returns:
+            int: Sample rate in Hz
+        """
+        if self._config:
+            return self._config.sample_rate
+        return None
+
+    def get_channels(self) -> Optional[int]:
+        """
+        Get the number of audio channels.
+
+        Returns:
+            int: Number of channels
+        """
+        if self._config:
+            return self._config.channels
+        return None
+
+    def get_frames_captured(self) -> int:
+        """
+        Get the number of frames captured.
+
+        Returns:
+            int: Number of frames
+        """
+        return self._frames_captured
+
+    def has_audio_detected(self) -> bool:
+        """
+        Check if audio was detected.
+
+        Returns:
+            bool: True if audio was detected
+        """
+        return self._has_audio_detected
+
     def get_current_stats(self) -> Optional[RecordingStats]:
         """
-        Obtém estatísticas da gravação atual.
-        
+        Get statistics of the current recording.
+
         Returns:
-            Optional[RecordingStats]: Estatísticas ou None se não estiver gravando
+            Optional[RecordingStats]: Statistics or None if not recording
         """
         if not self._stats:
             return None
-        
-        # Atualizar duração atual se estiver gravando
+
+        # Update current duration if recording
         if self._recording:
             current_time = datetime.now()
             self._stats.duration = (current_time - self._stats.start_time).total_seconds()
-        
+
         return self._stats
-    
+
     def _cleanup_recording(self) -> None:
         """
-        Limpa recursos de gravação em caso de erro.
+        Clean up recording resources in case of error.
         """
         self._recording = False
-        
+
         if self._stream:
             try:
                 self._stream.stop_stream()
@@ -514,26 +694,26 @@ class AudioRecorder:
                 pass
             finally:
                 self._stream = None
-        
+
         self._frames = []
         self._stats = None
-    
+
     def close(self) -> None:
         """
-        Finaliza o gravador e libera recursos.
+        Finalize the recorder and release resources.
         """
         if self._recording:
             try:
                 self.stop_recording()
             except Exception as e:
-                logger.warning(f"Erro ao parar gravação durante fechamento: {e}")
-        
+                logger.warning(f"Error stopping recording during close: {e}")
+
         if self._audio:
             try:
                 self._audio.terminate()
-                logger.info("Sistema de áudio do gravador finalizado")
+                logger.info("Recorder audio system terminated")
             except Exception as e:
-                logger.warning(f"Erro ao finalizar PyAudio: {e}")
+                logger.warning(f"Error terminating PyAudio: {e}")
             finally:
                 self._audio = None
     
@@ -548,32 +728,32 @@ class AudioRecorder:
 
 def create_recorder_from_config() -> AudioRecorder:
     """
-    Cria um gravador usando configurações do settings.
-    
+    Create a recorder using settings configuration.
+
     Returns:
-        AudioRecorder: Gravador configurado
-        
+        AudioRecorder: Configured recorder
+
     Raises:
-        AudioRecorderError: Se não conseguir criar o gravador
+        AudioRecorderError: If unable to create recorder
     """
     try:
         from config import settings
-        
+
         recorder = AudioRecorder()
-        
+
         if recorder.set_device_auto():
-            # Atualizar configuração com settings
+            # Update configuration with settings
             recorder._config.sample_rate = settings.audio_sample_rate
             recorder._config.channels = settings.audio_channels
             recorder._config.output_dir = settings.recordings_dir
-            
-            logger.info("Gravador criado com configurações do sistema")
+
+            logger.info("Recorder created with system configuration")
             return recorder
         else:
-            raise AudioRecorderError("Não foi possível configurar dispositivo automaticamente")
-            
+            raise AudioRecorderError("Could not configure device automatically")
+
     except ImportError:
-        logger.warning("Configurações não disponíveis, usando padrões")
+        logger.warning("Configuration not available, using defaults")
         recorder = AudioRecorder()
         recorder.set_device_auto()
         return recorder
@@ -581,59 +761,59 @@ def create_recorder_from_config() -> AudioRecorder:
 
 def main():
     """
-    Função principal para teste e demonstração do AudioRecorder.
+    Main function for testing and demonstrating AudioRecorder.
     """
-    logger.info("Iniciando demonstração do Audio Recorder")
-    
+    logger.info("Starting Audio Recorder demonstration")
+
     try:
         with create_recorder_from_config() as recorder:
-            print("\n[AUDIO] DEMONSTRACAO DO GRAVADOR DE AUDIO")
+            print("\n[AUDIO] AUDIO RECORDER DEMONSTRATION")
             print("="*50)
-            
-            # Mostrar configuração
+
+            # Show configuration
             config = recorder._config
             if config:
-                print(f"Dispositivo: {config.device.name}")
+                print(f"Device: {config.device.name}")
                 print(f"API: {config.device.host_api}")
-                print(f"Taxa: {config.sample_rate} Hz")
-                print(f"Canais: {config.channels}")
-                print(f"Loopback: {'Sim' if config.device.is_loopback else 'Nao'}")
+                print(f"Rate: {config.sample_rate} Hz")
+                print(f"Channels: {config.channels}")
+                print(f"Loopback: {'Yes' if config.device.is_loopback else 'No'}")
             else:
-                print("Nenhuma configuracao disponivel")
+                print("No configuration available")
                 return
-            
-            # Testar gravação curta
-            print(f"\nIniciando gravacao de teste (5 segundos)...")
-            
+
+            # Test short recording
+            print(f"\nStarting test recording (5 seconds)...")
+
             def progress_callback(duration):
-                print(f"\rGravando: {duration:.1f}s", end="", flush=True)
-            
+                print(f"\rRecording: {duration:.1f}s", end="", flush=True)
+
             filepath = recorder.start_recording(
-                filename="teste_gravacao",
+                filename="test_recording",
                 progress_callback=progress_callback
             )
-            
-            # Aguardar 5 segundos
+
+            # Wait 5 seconds
             time.sleep(5)
-            
-            # Parar gravação
-            print(f"\nParando gravacao...")
+
+            # Stop recording
+            print(f"\nStopping recording...")
             stats = recorder.stop_recording()
-            
-            # Mostrar resultados
-            print(f"\n[OK] Gravacao concluida!")
-            print(f"Arquivo: {stats.filename}")
-            print(f"Duracao: {stats.duration:.2f} segundos")
-            print(f"Tamanho: {stats.file_size} bytes")
+
+            # Show results
+            print(f"\n[OK] Recording completed!")
+            print(f"File: {stats.filename}")
+            print(f"Duration: {stats.duration:.2f} seconds")
+            print(f"Size: {stats.file_size} bytes")
             print(f"Samples: {stats.samples_recorded}")
-            
+
     except AudioRecorderError as e:
-        logger.error(f"Erro no gravador: {e}")
-        print(f"[ERROR] Erro no gravador: {e}")
-        
+        logger.error(f"Recorder error: {e}")
+        print(f"[ERROR] Recorder error: {e}")
+
     except Exception as e:
-        logger.error(f"Erro inesperado: {e}")
-        print(f"[ERROR] Erro inesperado: {e}")
+        logger.error(f"Unexpected error: {e}")
+        print(f"[ERROR] Unexpected error: {e}")
 
 
 if __name__ == "__main__":
