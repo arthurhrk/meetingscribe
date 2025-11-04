@@ -67,19 +67,6 @@
                                           "gemini",
                                           "status"
                                       ]
-                     },
-                     {
-                         "name":  "status",
-                         "title":  "System Status",
-                         "subtitle":  "MeetingScribe",
-                         "description":  "Check audio devices and system health",
-                         "mode":  "view",
-                         "keywords":  [
-                                          "status",
-                                          "system",
-                                          "devices",
-                                          "health"
-                                      ]
                      }
                  ],
     "preferences":  [
