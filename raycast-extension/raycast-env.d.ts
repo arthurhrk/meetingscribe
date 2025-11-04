@@ -28,8 +28,6 @@ declare type Preferences = ExtensionPreferences
 declare namespace Preferences {
   /** Preferences accessible in the `record` command */
   export type Record = ExtensionPreferences & {}
-  /** Preferences accessible in the `import-google` command */
-  export type ImportGoogle = ExtensionPreferences & {}
   /** Preferences accessible in the `recording-status` command */
   export type RecordingStatus = ExtensionPreferences & {}
   /** Preferences accessible in the `recent` command */
@@ -43,8 +41,6 @@ declare namespace Preferences {
 declare namespace Arguments {
   /** Arguments passed to the `record` command */
   export type Record = {}
-  /** Arguments passed to the `import-google` command */
-  export type ImportGoogle = {}
   /** Arguments passed to the `recording-status` command */
   export type RecordingStatus = {}
   /** Arguments passed to the `recent` command */

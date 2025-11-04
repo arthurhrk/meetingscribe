@@ -26,21 +26,7 @@
                                           "wasapi"
                                       ]
                      },
-                     {
-                         "name":  "import-google",
-                         "title":  "Transcribe Audio",
-                         "subtitle":  "MeetingScribe",
-                         "description":  "Transcribe a recording using Google Gemini",
-                         "mode":  "view",
-                         "keywords":  [
-                                          "import",
-                                          "google",
-                                          "gemini",
-                                          "transcription",
-                                          "ai"
-                                      ]
-                     },
-                     {
+                      {
                          "name":  "recording-status",
                          "title":  "Recording Status",
                          "subtitle":  "MeetingScribe",
