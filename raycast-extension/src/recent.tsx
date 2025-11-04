@@ -300,7 +300,7 @@ export default function RecentRecordings() {
     const statusFile = path.join(projectPath, "storage", "status", `${sessionId}.json`);
 
     try {
-      const scriptPath = path.join(projectPath, "src", "import_google.py");
+      const scriptPath = path.join(projectPath, "src", "transcriber.py");
 
       const args = [
         scriptPath,
@@ -479,27 +479,39 @@ export default function RecentRecordings() {
                       <Action
                         title="Open Transcript"
                         icon={Icon.Document}
-                        shortcut={{ modifiers: ["cmd"], key: "t" }}
+                        shortcut={{
+                          macOS: { modifiers: ["cmd"], key: "t" },
+                          windows: { modifiers: ["ctrl"], key: "t" },
+                        }}
                         onAction={() => openTranscript(recording)}
                       />
                     )}
                     <Action
                       title={hasTranscript ? "Transcribe Again" : "Transcribe with Gemini"}
                       icon={Icon.SpeechBubble}
-                      shortcut={{ modifiers: ["cmd", "shift"], key: "t" }}
+                      shortcut={{
+                        macOS: { modifiers: ["cmd", "shift"], key: "t" },
+                        windows: { modifiers: ["ctrl", "shift"], key: "t" },
+                      }}
                       onAction={() => transcribeRecording(recording)}
                     />
                     <Action.Push
                       title="Rename"
                       icon={Icon.Pencil}
-                      shortcut={{ modifiers: ["cmd"], key: "r" }}
+                      shortcut={{
+                        macOS: { modifiers: ["cmd"], key: "r" },
+                        windows: { modifiers: ["ctrl"], key: "r" },
+                      }}
                       target={<RenameForm recording={recording} onRename={renameRecording} />}
                     />
                     <Action
                       title="Delete"
                       icon={Icon.Trash}
                       style={Action.Style.Destructive}
-                      shortcut={{ modifiers: ["cmd"], key: "backspace" }}
+                      shortcut={{
+                        macOS: { modifiers: ["cmd"], key: "backspace" },
+                        windows: { modifiers: ["ctrl", "shift"], key: "d" },
+                      }}
                       onAction={() => deleteRecording(recording)}
                     />
                   </ActionPanel.Section>
@@ -512,14 +524,20 @@ export default function RecentRecordings() {
                     <Action.CopyToClipboard
                       title="Copy File Path"
                       content={recording.fullPath}
-                      shortcut={{ modifiers: ["cmd"], key: "c" }}
+                      shortcut={{
+                        macOS: { modifiers: ["cmd"], key: "c" },
+                        windows: { modifiers: ["ctrl"], key: "c" },
+                      }}
                     />
                   </ActionPanel.Section>
                   <ActionPanel.Section title="Refresh">
                     <Action
                       title="Refresh List"
                       icon={Icon.ArrowClockwise}
-                      shortcut={{ modifiers: ["cmd", "shift"], key: "r" }}
+                      shortcut={{
+                        macOS: { modifiers: ["cmd", "shift"], key: "r" },
+                        windows: { modifiers: ["ctrl", "shift"], key: "r" },
+                      }}
                       onAction={loadRecordings}
                     />
                   </ActionPanel.Section>

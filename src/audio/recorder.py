@@ -17,6 +17,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Callable, Dict, Any
 from dataclasses import dataclass, field
+import locale
 
 from loguru import logger
 from .devices import DeviceManager, AudioDevice, AudioDeviceError
@@ -286,8 +287,13 @@ class AudioRecorder:
 
         # Generate filename
         if not filename:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            # Use local time (not UTC) for the filename timestamp
+            # datetime.now() returns local time by default, but we ensure it's used explicitly
+            local_time = datetime.now()
+            # Format: YYYYMMDD_HHMMSS (local timezone)
+            timestamp = local_time.strftime("%Y%m%d_%H%M%S")
             filename = f"meeting_{timestamp}"
+            logger.debug(f"Generated filename with local timestamp: {timestamp}")
 
         # Ensure correct extension based on format
         audio_format = self._config.audio_format.lower()

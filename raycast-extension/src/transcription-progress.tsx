@@ -29,6 +29,8 @@ interface TranscriptionProgress {
   totalSteps: number;
   progress: number;
   message: string;
+  isCompleted?: boolean;
+  transcriptPath?: string;
 }
 
 export default function TranscriptionProgress() {
@@ -86,6 +88,10 @@ export default function TranscriptionProgress() {
               }
             }
 
+            // Check if transcription is completed (step 4 = saving with 100% progress)
+            const isCompleted = status.progress === 100 && status.step === "saving";
+            const transcriptPath = isCompleted ? findTranscriptFile(audioFilename) : undefined;
+
             return {
               sessionId,
               filename,
@@ -95,6 +101,8 @@ export default function TranscriptionProgress() {
               totalSteps: status.total_steps || 4,
               progress: status.progress || 0,
               message: status.message || "Processing...",
+              isCompleted,
+              transcriptPath,
             };
           } catch (e) {
             // Skip files that can't be read
@@ -114,6 +122,44 @@ export default function TranscriptionProgress() {
 
   function openInFinder(filePath: string) {
     open(path.dirname(filePath));
+  }
+
+  function findTranscriptFile(audioFilename: string): string | undefined {
+    try {
+      const transcriptDir = path.join(projectPath, "storage", "transcriptions");
+
+      if (!fs.existsSync(transcriptDir)) {
+        return undefined;
+      }
+
+      // Generate expected transcript filename (replace audio extension with .md)
+      const baseName = audioFilename.replace(/\.(wav|m4a)$/, "");
+      const transcriptPath = path.join(transcriptDir, `${baseName}.md`);
+
+      if (fs.existsSync(transcriptPath)) {
+        return transcriptPath;
+      }
+
+      return undefined;
+    } catch (error) {
+      console.error("[TranscriptionProgress] Error finding transcript file:", error);
+      return undefined;
+    }
+  }
+
+  function openTranscript(transcriptPath: string) {
+    try {
+      console.log(`[TranscriptionProgress] Opening transcript: ${transcriptPath}`);
+      open(transcriptPath);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error(`[TranscriptionProgress] Error opening transcript: ${errorMsg}`);
+      showToast({
+        style: Toast.Style.Failure,
+        title: "Error Opening Transcript",
+        message: errorMsg,
+      });
+    }
   }
 
   async function deleteProgressFile(sessionId: string) {
@@ -244,6 +290,17 @@ ${transcription.message}
             actions={
               <ActionPanel>
                 <ActionPanel.Section title="View">
+                  {transcription.isCompleted && transcription.transcriptPath && (
+                    <Action
+                      title="Open Transcription"
+                      icon={Icon.Document}
+                      shortcut={{
+                        macOS: { modifiers: ["cmd"], key: "o" },
+                        windows: { modifiers: ["ctrl"], key: "o" },
+                      }}
+                      onAction={() => openTranscript(transcription.transcriptPath!)}
+                    />
+                  )}
                   <Action
                     title="Open Status Folder"
                     icon={Icon.Finder}
@@ -252,7 +309,10 @@ ${transcription.message}
                   <Action
                     title="Refresh List"
                     icon={Icon.ArrowClockwise}
-                    shortcut={{ modifiers: ["cmd", "shift"], key: "r" }}
+                    shortcut={{
+                      macOS: { modifiers: ["cmd", "shift"], key: "r" },
+                      windows: { modifiers: ["ctrl", "shift"], key: "r" },
+                    }}
                     onAction={loadProgressStatus}
                   />
                 </ActionPanel.Section>
@@ -261,7 +321,10 @@ ${transcription.message}
                     title="Delete Progress File"
                     icon={Icon.Trash}
                     style={Action.Style.Destructive}
-                    shortcut={{ modifiers: ["cmd"], key: "backspace" }}
+                    shortcut={{
+                      macOS: { modifiers: ["cmd"], key: "backspace" },
+                      windows: { modifiers: ["ctrl", "shift"], key: "d" },
+                    }}
                     onAction={() => {
                       deleteProgressFile(transcription.sessionId).catch((error) => {
                         console.error(`[TranscriptionProgress] Delete action error: ${error}`);

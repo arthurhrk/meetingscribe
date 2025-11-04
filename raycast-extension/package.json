@@ -2,7 +2,7 @@
     "$schema":  "https://www.raycast.com/schemas/extension.json",
     "name":  "meetingscribe",
     "title":  "MeetingScribe",
-    "description":  "Record Microsoft Teams meetings with professional-quality audio using WASAPI loopback capture.",
+    "description":  "Record computer audio with professional-quality audio using WASAPI loopback capture.",
     "icon":  "icon.png",
     "author":  "Arthurhrk",
     "license":  "MIT",
@@ -15,14 +15,12 @@
                      {
                          "name":  "record",
                          "title":  "Start Recording",
-                         "subtitle":  "MeetingScribe",
-                         "description":  "Record Teams meeting audio with high quality",
+                         "subtitle":  "record audio",
+                         "description":  "Record computer audio with high quality",
                          "mode":  "view",
                          "keywords":  [
                                           "record",
                                           "audio",
-                                          "meeting",
-                                          "teams",
                                           "wasapi"
                                       ]
                      },
