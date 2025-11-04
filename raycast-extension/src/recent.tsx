@@ -339,6 +339,8 @@ export default function RecentRecordings() {
         if (stdout) console.log(`[Transcription] stdout: ${stdout}`);
         if (stderr) console.log(`[Transcription] stderr: ${stderr}`);
 
+        let shouldDeleteStatusFile = false;
+
         if (code === 0) {
           try {
             const result = JSON.parse(stdout);
@@ -351,6 +353,7 @@ export default function RecentRecordings() {
                 title: "Transcription Complete",
                 message: `Saved to: ${path.basename(result.transcript_file)}`,
               });
+              shouldDeleteStatusFile = true;
             } else {
               const errorMsg = result.error || "Unknown error";
               console.error(`[Transcription] Transcription failed: ${errorMsg}`);
@@ -359,6 +362,7 @@ export default function RecentRecordings() {
                 title: "Transcription Failed",
                 message: errorMsg,
               });
+              console.log(`[Transcription] Preserving progress file for error diagnosis: ${statusFile}`);
             }
           } catch (e) {
             const errorMsg = stdout || stderr;
@@ -368,6 +372,7 @@ export default function RecentRecordings() {
               title: "Error parsing response",
               message: errorMsg,
             });
+            console.log(`[Transcription] Preserving progress file for error diagnosis: ${statusFile}`);
           }
         } else {
           const errorMsg = stderr || `Process exited with code ${code}`;
@@ -377,17 +382,22 @@ export default function RecentRecordings() {
             title: "Transcription Failed",
             message: errorMsg,
           });
+          console.log(`[Transcription] Preserving progress file for error diagnosis: ${statusFile}`);
         }
 
         loadRecordings(); // Refresh to show transcript file
 
-        // Clean up status file
-        try {
-          if (fs.existsSync(statusFile)) {
-            fs.unlinkSync(statusFile);
+        // Clean up status file only on successful completion
+        if (shouldDeleteStatusFile) {
+          try {
+            if (fs.existsSync(statusFile)) {
+              fs.unlinkSync(statusFile);
+              console.log(`[Transcription] Deleted progress file after successful transcription: ${statusFile}`);
+            }
+          } catch (e) {
+            const deleteError = e instanceof Error ? e.message : String(e);
+            console.warn(`[Transcription] Failed to delete progress file: ${deleteError}`);
           }
-        } catch (e) {
-          // Ignore cleanup errors
         }
       });
 
