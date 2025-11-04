@@ -68,17 +68,18 @@
                                       ]
                      },
                      {
-                         "name":  "transcript-status",
-                         "title":  "Transcript Status",
+                         "name":  "transcription-progress",
+                         "title":  "Transcription Progress",
                          "subtitle":  "MeetingScribe",
-                         "description":  "Monitor active transcriptions and view results",
+                         "description":  "Monitor active transcriptions in real-time",
                          "mode":  "view",
                          "keywords":  [
                                           "transcript",
                                           "transcription",
-                                          "status",
+                                          "progress",
+                                          "monitor",
                                           "gemini",
-                                          "progress"
+                                          "status"
                                       ]
                      },
                      {
@@ -138,6 +139,24 @@
                                          {
                                              "title":  "Gemini 1.5 Pro (More Accurate)",
                                              "value":  "models/gemini-1.5-pro"
+                                         }
+                                     ]
+                        },
+                        {
+                            "name":  "audioFormat",
+                            "title":  "Audio Format",
+                            "description":  "Choose the audio format for recording (WAV is uncompressed, M4A is compressed)",
+                            "type":  "dropdown",
+                            "default":  "wav",
+                            "required":  false,
+                            "data":  [
+                                         {
+                                             "title":  "WAV (Uncompressed)",
+                                             "value":  "wav"
+                                         },
+                                         {
+                                             "title":  "M4A (Compressed)",
+                                             "value":  "m4a"
                                          }
                                      ]
                         },

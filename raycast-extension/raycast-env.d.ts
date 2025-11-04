@@ -16,6 +16,8 @@ type ExtensionPreferences = {
   "geminiApiKey": string,
   /** Gemini Model - Choose which Gemini model to use for transcription */
   "geminiModel": "models/gemini-2.0-flash-exp" | "models/gemini-1.5-pro",
+  /** Audio Format - Choose the audio format for recording (WAV is uncompressed, M4A is compressed) */
+  "audioFormat": "wav" | "m4a",
   /** Optimize Audio Before Upload - Reduce audio file size before uploading (converts to 16kHz mono WAV). Requires ffmpeg for non-WAV files. */
   "optimizeAudio": boolean
 }
@@ -32,8 +34,8 @@ declare namespace Preferences {
   export type RecordingStatus = ExtensionPreferences & {}
   /** Preferences accessible in the `recent` command */
   export type Recent = ExtensionPreferences & {}
-  /** Preferences accessible in the `transcript-status` command */
-  export type TranscriptStatus = ExtensionPreferences & {}
+  /** Preferences accessible in the `transcription-progress` command */
+  export type TranscriptionProgress = ExtensionPreferences & {}
   /** Preferences accessible in the `status` command */
   export type Status = ExtensionPreferences & {}
 }
@@ -47,8 +49,8 @@ declare namespace Arguments {
   export type RecordingStatus = {}
   /** Arguments passed to the `recent` command */
   export type Recent = {}
-  /** Arguments passed to the `transcript-status` command */
-  export type TranscriptStatus = {}
+  /** Arguments passed to the `transcription-progress` command */
+  export type TranscriptionProgress = {}
   /** Arguments passed to the `status` command */
   export type Status = {}
 }

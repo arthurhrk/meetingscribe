@@ -13,11 +13,11 @@ from datetime import datetime
 from typing import Optional
 
 from loguru import logger
-from audio import AudioRecorder, AudioRecorderError
+from audio import AudioRecorder, AudioRecorderError, RecordingQuality
 from config import settings
 
 
-def quick_record(duration: int = 30, filename: Optional[str] = None) -> dict:
+def quick_record(duration: int = 30, filename: Optional[str] = None, audio_format: str = "wav") -> dict:
     """
     Quick recording function for Raycast integration.
     Returns JSON immediately, continues recording in background.
@@ -25,15 +25,25 @@ def quick_record(duration: int = 30, filename: Optional[str] = None) -> dict:
     Args:
         duration: Recording duration in seconds
         filename: Optional custom filename
+        audio_format: Audio format ('wav' or 'm4a')
 
     Returns:
         dict: Status and recording info
     """
+    logger.debug(f"========================================")
+    logger.debug(f"quick_record() called with:")
+    logger.debug(f"  duration: {duration}")
+    logger.debug(f"  filename: {filename}")
+    logger.debug(f"  audio_format: {audio_format}")
+    logger.debug(f"========================================")
+
     # Generate identifiers
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     session_id = f"rec-{timestamp}"
     if not filename:
-        filename = f"recording_{timestamp}.wav"
+        ext = audio_format.lower() if audio_format.lower() in ['wav', 'm4a'] else 'wav'
+        filename = f"recording_{timestamp}.{ext}"
+        logger.debug(f"Generated filename: {filename} (format: {audio_format})")
 
     filepath = Path(settings.recordings_dir) / filename
     status_file = Path(settings.status_dir) / f"{session_id}.json"
@@ -72,21 +82,43 @@ def quick_record(duration: int = 30, filename: Optional[str] = None) -> dict:
                 }))
                 return
 
-            # Configure duration
+            # Configure duration and format
             recorder._config.max_duration = duration
+            recorder._config.audio_format = audio_format.lower()
+
+            logger.debug(f"========================================")
+            logger.debug(f"Recorder configuration:")
+            logger.debug(f"  max_duration: {recorder._config.max_duration}")
+            logger.debug(f"  audio_format: {recorder._config.audio_format}")
+            logger.debug(f"  device: {recorder._config.device.name if recorder._config.device else 'None'}")
+            logger.debug(f"  sample_rate: {recorder._config.sample_rate}")
+            logger.debug(f"  channels: {recorder._config.channels}")
+            logger.debug(f"========================================")
 
             # Start recording
             recorder.start_recording(filename=filename)
-            logger.info(f"Recording started: {filename} ({duration}s)")
+            logger.info(f"Recording started: {filename} ({duration}s, format: {audio_format})")
 
-            # Write initial status
+            # Write initial status with metadata
+            quality_preset = RecordingQuality.get('professional')
             status_file.write_text(json.dumps({
                 "status": "recording",
                 "session_id": session_id,
                 "filename": filename,
                 "duration": duration,
                 "elapsed": 0,
-                "progress": 0
+                "progress": 0,
+                "quality": "professional",
+                "quality_info": {
+                    "name": quality_preset['name'],
+                    "description": quality_preset['description'],
+                    "size_per_min": quality_preset['size_per_min']
+                },
+                "device": recorder.get_device_name(),
+                "sample_rate": recorder.get_sample_rate(),
+                "channels": recorder.get_channels(),
+                "frames_captured": 0,
+                "has_audio": False
             }))
 
             # Update status every second
@@ -101,7 +133,18 @@ def quick_record(duration: int = 30, filename: Optional[str] = None) -> dict:
                     "filename": filename,
                     "duration": duration,
                     "elapsed": elapsed,
-                    "progress": progress
+                    "progress": progress,
+                    "quality": "professional",
+                    "quality_info": {
+                        "name": quality_preset['name'],
+                        "description": quality_preset['description'],
+                        "size_per_min": quality_preset['size_per_min']
+                    },
+                    "device": recorder.get_device_name(),
+                    "sample_rate": recorder.get_sample_rate(),
+                    "channels": recorder.get_channels(),
+                    "frames_captured": recorder.get_frames_captured(),
+                    "has_audio": recorder.has_audio_detected()
                 }))
 
             # Stop recording
@@ -116,13 +159,24 @@ def quick_record(duration: int = 30, filename: Optional[str] = None) -> dict:
             # Get file size
             file_size_mb = round(filepath.stat().st_size / (1024 * 1024), 2) if filepath.exists() else 0
 
-            # Write completion status
+            # Write completion status with all metadata
             status_file.write_text(json.dumps({
                 "status": "completed",
                 "session_id": session_id,
                 "filename": filename,
                 "duration": duration,
-                "file_size_mb": file_size_mb
+                "file_size_mb": file_size_mb,
+                "quality": "professional",
+                "quality_info": {
+                    "name": quality_preset['name'],
+                    "description": quality_preset['description'],
+                    "size_per_min": quality_preset['size_per_min']
+                },
+                "device": recorder.get_device_name(),
+                "sample_rate": recorder.get_sample_rate(),
+                "channels": recorder.get_channels(),
+                "frames_captured": recorder.get_frames_captured(),
+                "has_audio": recorder.has_audio_detected()
             }))
 
             logger.info(f"Status updated to completed: {file_size_mb}MB")
@@ -178,7 +232,19 @@ def main():
         if command == "record":
             # Quick record mode
             duration = int(sys.argv[2]) if len(sys.argv) > 2 else 30
-            result, thread = quick_record(duration=duration)
+            audio_format = sys.argv[3] if len(sys.argv) > 3 else "wav"
+
+            logger.debug(f"========================================")
+            logger.debug(f"CLI Command: record")
+            logger.debug(f"Full sys.argv: {sys.argv}")
+            logger.debug(f"Arguments count: {len(sys.argv)}")
+            logger.debug(f"Duration (argv[2]): {sys.argv[2] if len(sys.argv) > 2 else 'NOT PROVIDED'}")
+            logger.debug(f"Audio Format (argv[3]): {sys.argv[3] if len(sys.argv) > 3 else 'NOT PROVIDED'}")
+            logger.debug(f"Parsed duration: {duration}")
+            logger.debug(f"Parsed audio_format: {audio_format}")
+            logger.debug(f"========================================")
+
+            result, thread = quick_record(duration=duration, audio_format=audio_format)
             print(json.dumps(result), flush=True)
 
             # Wait for recording to complete
