@@ -2,6 +2,7 @@ import {
   ActionPanel,
   Action,
   List,
+  Detail,
   showToast,
   Toast,
   getPreferenceValues,
@@ -10,7 +11,8 @@ import {
   open,
   confirmAlert,
   Alert,
-} from "@raycast/api";import { useState, useEffect, useRef, useCallback } from "react";
+} from "@raycast/api";
+import { useState, useEffect, useRef, useCallback } from "react";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -31,6 +33,108 @@ interface TranscriptionStatus {
   isCompleted?: boolean;
   recordingDate?: string;
   transcriptPath?: string;
+}
+
+function TranscriptionDetailView({
+  transcription,
+}: {
+  transcription: TranscriptionStatus;
+  projectPath: string;
+}) {
+  const getProgressBar = (progress: number): string => {
+    const filled = Math.floor(progress / 5);
+    const empty = 20 - filled;
+    return "█".repeat(filled) + "░".repeat(empty);
+  };
+
+  const getStepIcon = (step: string): string => {
+    switch (step) {
+      case "uploading":
+        return "📤";
+      case "processing":
+        return "⚙️";
+      case "transcribing":
+        return "🎤";
+      case "saving":
+        return "💾";
+      default:
+        return "⏳";
+    }
+  };
+
+  return (
+    <Detail
+      markdown={`${getStepIcon(transcription.step)} **${transcription.step.charAt(0).toUpperCase() + transcription.step.slice(1)}** ${transcription.stepNumber}/${transcription.totalSteps} • ${transcription.progress}%
+
+${getProgressBar(transcription.progress)}
+
+${transcription.message}`}
+      metadata={
+        <Detail.Metadata>
+          <Detail.Metadata.Label
+            title="File"
+            text={transcription.audioFilename}
+          />
+          <Detail.Metadata.Label
+            title="Recorded"
+            text={transcription.recordingDate || "Unknown"}
+          />
+          <Detail.Metadata.Separator />
+          <Detail.Metadata.Label
+            title="Step"
+            text={`${transcription.step} (${transcription.stepNumber}/${transcription.totalSteps})`}
+          />
+          <Detail.Metadata.Label
+            title="Progress"
+            text={`${transcription.progress}%`}
+          />
+          <Detail.Metadata.Label
+            title="Status"
+            text={transcription.message}
+          />
+          <Detail.Metadata.Separator />
+          <Detail.Metadata.Label
+            title="Session ID"
+            text={transcription.sessionId}
+          />
+          <Detail.Metadata.Label
+            title="State"
+            text={transcription.isCompleted ? "✅ Completed" : "⏳ In Progress"}
+          />
+        </Detail.Metadata>
+      }
+      actions={
+        <ActionPanel>
+          <Action
+            title="Copy Audio Filename"
+            icon={Icon.CopyClipboard}
+            shortcut={{
+              macOS: { modifiers: ["cmd"], key: "c" },
+              windows: { modifiers: ["ctrl"], key: "c" },
+            }}
+            onAction={() => {
+              showToast({
+                style: Toast.Style.Success,
+                title: "Copied to Clipboard",
+                message: transcription.audioFilename,
+              });
+            }}
+          />
+          <Action
+            title="Copy Session ID"
+            icon={Icon.CopyClipboard}
+            onAction={() => {
+              showToast({
+                style: Toast.Style.Success,
+                title: "Copied to Clipboard",
+                message: transcription.sessionId,
+              });
+            }}
+          />
+        </ActionPanel>
+      }
+    />
+  );
 }
 
 export default function TranscriptionProgress() {
@@ -102,7 +206,7 @@ export default function TranscriptionProgress() {
               stepNumber: status.step_number || 0,
               totalSteps: status.total_steps || 4,
               progress: status.progress || 0,
-              message: status.message || "Processing...",
+              message: isCompleted ? "✅ Transcription complete" : (status.message || "Processing..."),
               recordingDate,
               isCompleted,
               transcriptPath,
@@ -251,7 +355,7 @@ export default function TranscriptionProgress() {
           <List.Item
             key={transcription.sessionId}
             title={transcription.audioFilename}
-            subtitle={`${getStepIcon(transcription.step)} [${transcription.step.charAt(0).toUpperCase() + transcription.step.slice(1)}] ${transcription.message}`}
+            subtitle={transcription.isCompleted ? `✅ ${transcription.message}` : `${getStepIcon(transcription.step)} [${transcription.step.charAt(0).toUpperCase() + transcription.step.slice(1)}] ${transcription.message}`}
             icon={transcription.isCompleted ? Icon.CheckCircle : Icon.Clock}
             accessories={[
               {
@@ -303,6 +407,20 @@ ${transcription.message}
             actions={
               <ActionPanel>
                 <ActionPanel.Section title="View">
+                  <Action.Push
+                    title="Show Details"
+                    icon={Icon.Eye}
+                    shortcut={{
+                      macOS: { modifiers: ["cmd"], key: "d" },
+                      windows: { modifiers: ["ctrl"], key: "d" },
+                    }}
+                    target={
+                      <TranscriptionDetailView
+                        transcription={transcription}
+                        projectPath={projectPath}
+                      />
+                    }
+                  />
                   {transcription.isCompleted && transcription.transcriptPath && (
                     <Action
                       title="Open Transcription"
