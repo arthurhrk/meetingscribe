@@ -31,7 +31,8 @@ interface TranscriptionStatus {
   progress: number;
   message: string;
   isCompleted?: boolean;
-  recordingDate?: string;
+  recordingDate?: string; // ISO string or localized string for display
+  recordingTimestamp?: number; // Unix timestamp for reliable date formatting
   transcriptPath?: string;
 }
 
@@ -91,11 +92,6 @@ ${transcription.message}`}
           <Detail.Metadata.Label
             title="Status"
             text={transcription.message}
-          />
-          <Detail.Metadata.Separator />
-          <Detail.Metadata.Label
-            title="Session ID"
-            text={transcription.sessionId}
           />
           <Detail.Metadata.Label
             title="State"
@@ -176,6 +172,7 @@ export default function TranscriptionProgress() {
             const recordingsDir = path.join(projectPath, "storage", "recordings");
             let audioFilename = "Unknown recording";
             let recordingDate: string | undefined = undefined;
+            let recordingTimestamp: number | undefined = undefined;
 
             if (fs.existsSync(recordingsDir)) {
               // Get the most recently modified audio file as a guess
@@ -190,6 +187,7 @@ export default function TranscriptionProgress() {
 
               if (recordings.length > 0) {
                 audioFilename = recordings[0].name;
+                recordingTimestamp = recordings[0].time;
                 recordingDate = new Date(recordings[0].time).toLocaleString();
               }
             }
@@ -206,8 +204,9 @@ export default function TranscriptionProgress() {
               stepNumber: status.step_number || 0,
               totalSteps: status.total_steps || 4,
               progress: status.progress || 0,
-              message: isCompleted ? "✅ Transcription complete" : (status.message || "Processing..."),
+              message: isCompleted ? "Transcription complete" : (status.message || "Processing..."),
               recordingDate,
+              recordingTimestamp,
               isCompleted,
               transcriptPath,
             };
@@ -216,8 +215,8 @@ export default function TranscriptionProgress() {
             return null;
           }
         })
-        .filter((item): item is TranscriptionStatus => item !== null)
-        .sort((a, b) => parseInt(b.sessionId) - parseInt(a.sessionId)); // Newest first
+        .filter((item) => item !== null)
+        .sort((a, b) => parseInt(b!.sessionId) - parseInt(a!.sessionId)); // Newest first
 
       // Only update state if the data has actually changed to prevent re-render loops
       if (JSON.stringify(files) !== JSON.stringify(transcriptions)) {
@@ -336,6 +335,14 @@ export default function TranscriptionProgress() {
     }
   }
 
+  function formatDateShort(timestamp?: number): string {
+    if (!timestamp) {
+      return "unknown";
+    }
+    const date = new Date(timestamp);
+    return date.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: '2-digit' }).toLowerCase();
+  }
+
   if (transcriptions.length === 0 && !isLoading) {
     return (
       <List>
@@ -355,7 +362,7 @@ export default function TranscriptionProgress() {
           <List.Item
             key={transcription.sessionId}
             title={transcription.audioFilename}
-            subtitle={transcription.isCompleted ? `✅ ${transcription.message}` : `${getStepIcon(transcription.step)} [${transcription.step.charAt(0).toUpperCase() + transcription.step.slice(1)}] ${transcription.message}`}
+            subtitle={transcription.isCompleted ? `${transcription.message} (${formatDateShort(transcription.recordingTimestamp)})` : `${getStepIcon(transcription.step)} [${transcription.step.charAt(0).toUpperCase() + transcription.step.slice(1)}] ${transcription.message}`}
             icon={transcription.isCompleted ? Icon.CheckCircle : Icon.Clock}
             accessories={[
               {
