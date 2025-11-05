@@ -52,8 +52,8 @@
                                       ]
                      },
                      {
-                         "name":  "transcription-progress",
-                         "title":  "Transcription Progress",
+                         "name":  "transcription-status",
+                         "title":  "Transcription Status",
                          "subtitle":  "MeetingScribe",
                          "description":  "Monitor active transcriptions in real-time",
                          "mode":  "view",

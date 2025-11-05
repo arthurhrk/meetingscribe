@@ -37,8 +37,9 @@ def quick_record(duration: int = 30, filename: Optional[str] = None, audio_forma
     logger.debug(f"  audio_format: {audio_format}")
     logger.debug(f"========================================")
 
-    # Generate identifiers
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Generate identifiers using local timezone (Windows-compatible)
+    local_now = datetime.now().astimezone()
+    timestamp = local_now.strftime("%Y%m%d_%H%M%S")
     session_id = f"rec-{timestamp}"
     if not filename:
         ext = audio_format.lower() if audio_format.lower() in ['wav', 'm4a'] else 'wav'
@@ -206,22 +207,18 @@ def quick_record(duration: int = 30, filename: Optional[str] = None, audio_forma
 def main():
     """Main CLI entry point"""
 
-    # Disable console logging when called with arguments (Raycast/CLI mode)
-    # This prevents log messages from appearing as "errors" in Raycast
-    if len(sys.argv) > 1:
-        # Remove console handler, keep only file logging
-        logger.remove()
-        from config import settings
-        logger.add(
-            settings.logs_dir / "meetingscribe.log",
-            rotation="10 MB",
-            retention="1 month",
-            level=settings.log_level,
-            format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {message}"
-        )
+    logger.remove()
+    from config import settings
+    logger.add(
+        settings.logs_dir / "meetingscribe.log",
+        rotation="10 MB",
+        retention="1 month",
+        level=settings.log_level,
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {message}"
+    )
 
     print("=" * 60)
-    print("MeetingScribe - Teams Recording")
+    print("MeetingScribe - Audio Recording")
     print("=" * 60)
     print()
 

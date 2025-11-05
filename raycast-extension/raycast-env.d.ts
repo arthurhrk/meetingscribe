@@ -32,8 +32,8 @@ declare namespace Preferences {
   export type RecordingStatus = ExtensionPreferences & {}
   /** Preferences accessible in the `recent` command */
   export type Recent = ExtensionPreferences & {}
-  /** Preferences accessible in the `transcription-progress` command */
-  export type TranscriptionProgress = ExtensionPreferences & {}
+  /** Preferences accessible in the `transcription-status` command */
+  export type TranscriptionStatus = ExtensionPreferences & {}
 }
 
 declare namespace Arguments {
@@ -43,7 +43,7 @@ declare namespace Arguments {
   export type RecordingStatus = {}
   /** Arguments passed to the `recent` command */
   export type Recent = {}
-  /** Arguments passed to the `transcription-progress` command */
-  export type TranscriptionProgress = {}
+  /** Arguments passed to the `transcription-status` command */
+  export type TranscriptionStatus = {}
 }
 

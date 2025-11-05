@@ -287,9 +287,8 @@ class AudioRecorder:
 
         # Generate filename
         if not filename:
-            # Use local time (not UTC) for the filename timestamp
-            # datetime.now() returns local time by default, but we ensure it's used explicitly
-            local_time = datetime.now()
+            # Use local time for the filename timestamp (Windows-compatible)
+            local_time = datetime.now().astimezone()
             # Format: YYYYMMDD_HHMMSS (local timezone)
             timestamp = local_time.strftime("%Y%m%d_%H%M%S")
             filename = f"meeting_{timestamp}"

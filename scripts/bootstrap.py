@@ -6,7 +6,6 @@ Goals (non-intrusive):
 - Create a local Python venv in .venv (if missing)
 - Install requirements.txt into that venv
 - Create storage folders used by the Raycast extension
-- Generate a .env.sample with useful variables (if missing)
 - Print precise next steps to run the Raycast extension (npm install / dev)
 
 It does NOT try to install Node/Raycast or modify your global system.
@@ -104,19 +103,6 @@ def main() -> int:
     trn_dir = repo_root / "storage" / "transcriptions"
     rec_dir.mkdir(parents=True, exist_ok=True)
     trn_dir.mkdir(parents=True, exist_ok=True)
-
-    # 5) Create .env.sample
-    env_sample = repo_root / ".env.sample"
-    if not env_sample.exists():
-        env_sample.write_text(
-            "# MeetingScribe sample env\n"
-            "GEMINI_API_KEY=\n"
-            "GEMINI_MODEL=models/gemini-2.0-flash-exp\n"
-            "GEMINI_OPTIMIZE=0\n"
-            "# AUDIO_FILE_PATH=absolute/or/relative/path.wav\n",
-            encoding="utf-8",
-        )
-        print("[*] Created .env.sample (configure Gemini if you plan to use Import Google)")
 
     # 6) Print next steps
     print("\n== Bootstrap complete ==")

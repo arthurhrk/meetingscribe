@@ -10,8 +10,7 @@ import {
   open,
   confirmAlert,
   Alert,
-} from "@raycast/api";
-import { useState, useEffect } from "react";
+} from "@raycast/api";import { useState, useEffect, useRef, useCallback } from "react";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -20,7 +19,7 @@ interface Preferences {
   projectPath: string;
 }
 
-interface TranscriptionProgress {
+interface TranscriptionStatus {
   sessionId: string;
   filename: string;
   audioFilename: string;
@@ -30,11 +29,12 @@ interface TranscriptionProgress {
   progress: number;
   message: string;
   isCompleted?: boolean;
+  recordingDate?: string;
   transcriptPath?: string;
 }
 
 export default function TranscriptionProgress() {
-  const [transcriptions, setTranscriptions] = useState<TranscriptionProgress[]>([]);
+  const [transcriptions, setTranscriptions] = useState<TranscriptionStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { projectPath } = getPreferenceValues<Preferences>();
 
@@ -71,6 +71,7 @@ export default function TranscriptionProgress() {
             // Try to find the audio filename from recent recordings
             const recordingsDir = path.join(projectPath, "storage", "recordings");
             let audioFilename = "Unknown recording";
+            let recordingDate: string | undefined = undefined;
 
             if (fs.existsSync(recordingsDir)) {
               // Get the most recently modified audio file as a guess
@@ -85,6 +86,7 @@ export default function TranscriptionProgress() {
 
               if (recordings.length > 0) {
                 audioFilename = recordings[0].name;
+                recordingDate = new Date(recordings[0].time).toLocaleString();
               }
             }
 
@@ -101,6 +103,7 @@ export default function TranscriptionProgress() {
               totalSteps: status.total_steps || 4,
               progress: status.progress || 0,
               message: status.message || "Processing...",
+              recordingDate,
               isCompleted,
               transcriptPath,
             };
@@ -109,13 +112,16 @@ export default function TranscriptionProgress() {
             return null;
           }
         })
-        .filter((item): item is TranscriptionProgress => item !== null)
+        .filter((item): item is TranscriptionStatus => item !== null)
         .sort((a, b) => parseInt(b.sessionId) - parseInt(a.sessionId)); // Newest first
 
-      setTranscriptions(files);
+      // Only update state if the data has actually changed to prevent re-render loops
+      if (JSON.stringify(files) !== JSON.stringify(transcriptions)) {
+        setTranscriptions(files);
+      }
       setIsLoading(false);
     } catch (error) {
-      console.error("[TranscriptionProgress] Error loading status:", error);
+      console.error("[TranscriptionStatus] Error loading status:", error);
       setIsLoading(false);
     }
   }
@@ -142,18 +148,18 @@ export default function TranscriptionProgress() {
 
       return undefined;
     } catch (error) {
-      console.error("[TranscriptionProgress] Error finding transcript file:", error);
+      console.error("[TranscriptionStatus] Error finding transcript file:", error);
       return undefined;
     }
   }
 
   function openTranscript(transcriptPath: string) {
     try {
-      console.log(`[TranscriptionProgress] Opening transcript: ${transcriptPath}`);
+      console.log(`[TranscriptionStatus] Opening transcript: ${transcriptPath}`);
       open(transcriptPath);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error(`[TranscriptionProgress] Error opening transcript: ${errorMsg}`);
+      console.error(`[TranscriptionStatus] Error opening transcript: ${errorMsg}`);
       showToast({
         style: Toast.Style.Failure,
         title: "Error Opening Transcript",
@@ -179,12 +185,12 @@ export default function TranscriptionProgress() {
     try {
       const statusDir = path.join(projectPath, "storage", "status");
       const statusFile = path.join(statusDir, `transcribe_${sessionId}.json`);
-      console.log(`[TranscriptionProgress] Attempting to delete: ${statusFile}`);
+      console.log(`[TranscriptionStatus] Attempting to delete: ${statusFile}`);
       if (fs.existsSync(statusFile)) {
         fs.unlinkSync(statusFile);
-        console.log(`[TranscriptionProgress] File deleted successfully`);
+        console.log(`[TranscriptionStatus] File deleted successfully`);
         const successMsg = `Progress File Deleted: Session ${sessionId} removed`;
-        console.log(`[TranscriptionProgress] ${successMsg}`);
+        console.log(`[TranscriptionStatus] ${successMsg}`);
         showToast({
           style: Toast.Style.Success,
           title: "Progress File Deleted",
@@ -192,11 +198,11 @@ export default function TranscriptionProgress() {
         });
         loadProgressStatus();
       } else {
-        console.log(`[TranscriptionProgress] File not found: ${statusFile}`);
+        console.log(`[TranscriptionStatus] File not found: ${statusFile}`);
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error(`[TranscriptionProgress] Error deleting progress file: ${errorMsg}`);
+      console.error(`[TranscriptionStatus] Error deleting progress file: ${errorMsg}`);
       showToast({
         style: Toast.Style.Failure,
         title: "Error Deleting Progress File",
@@ -232,7 +238,7 @@ export default function TranscriptionProgress() {
         <List.EmptyView
           icon={Icon.SpeechBubble}
           title="No Transcriptions in Progress"
-          description="Start a transcription from 'Recent Recordings' command using Cmd+Shift+T"
+          description="Start a transcription from 'Recent Recordings'"
         />
       </List>
     );
@@ -240,13 +246,13 @@ export default function TranscriptionProgress() {
 
   return (
     <List isLoading={isLoading} searchBarPlaceholder="Search transcriptions...">
-      <List.Section title={`${transcriptions.length} in Progress`}>
+      <List.Section title={`${transcriptions.length} transcriptions`}>
         {transcriptions.map((transcription) => (
           <List.Item
             key={transcription.sessionId}
             title={transcription.audioFilename}
             subtitle={`${getStepIcon(transcription.step)} [${transcription.step.charAt(0).toUpperCase() + transcription.step.slice(1)}] ${transcription.message}`}
-            icon={Icon.SpeechBubble}
+            icon={transcription.isCompleted ? Icon.CheckCircle : Icon.Clock}
             accessories={[
               {
                 text: `${transcription.progress}%`,
@@ -256,7 +262,10 @@ export default function TranscriptionProgress() {
             detail={
               <List.Item.Detail
                 markdown={`
-# Transcription Progress
+# Transcription Status
+
+## Recording Date
+\`${transcription.recordingDate || "Unknown"}\`
 
 ## File
 \`${transcription.audioFilename}\`
@@ -277,6 +286,10 @@ ${transcription.message}
                 metadata={
                   <List.Item.Detail.Metadata>
                     <List.Item.Detail.Metadata.Label title="File" text={transcription.audioFilename} />
+                    <List.Item.Detail.Metadata.Label
+                      title="Recording Date"
+                      text={transcription.recordingDate || "Unknown"}
+                    />
                     <List.Item.Detail.Metadata.Label
                       title="Step"
                       text={`${transcription.stepNumber}/${transcription.totalSteps}`}

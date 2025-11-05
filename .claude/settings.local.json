@@ -53,7 +53,9 @@
       "Bash(.venvScriptspython.exe -m cli record 10)",
       "Bash(git checkout:*)",
       "Bash(git log:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(tree:*)",
+      "Bash(nul)"
     ],
     "deny": []
   }

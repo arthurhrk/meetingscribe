@@ -171,7 +171,8 @@ class TeamsIntegration:
                 return False
             
             # Criar nome do arquivo baseado na reunião
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            local_now = datetime.now().astimezone()
+            timestamp = local_now.strftime("%Y%m%d_%H%M%S")
             meeting_name = meeting_info['title'].replace(' ', '_')[:50]  # Limitar nome
             filename = f"teams_meeting_{meeting_name}_{timestamp}.wav"
             

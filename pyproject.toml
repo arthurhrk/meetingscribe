@@ -1,7 +1,7 @@
 [project]
 name = "meetingscribe"
 version = "2.0.0"
-description = "High-quality Teams meeting audio recorder via Raycast"
+description = "High-quality audio recorder via Raycast"
 readme = "docs/USER_GUIDE.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }

@@ -9,7 +9,7 @@ import {
   Color,
   open,
 } from "@raycast/api";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -46,6 +46,17 @@ export default function RecordingStatus() {
   const [activeRecordings, setActiveRecordings] = useState<RecordingStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const previousDataRef = useRef<string>("");
+
+  // Deep equality check - compare JSON serialization
+  const hasDataChanged = (newRecordings: RecordingStatus[]): boolean => {
+    const newData = JSON.stringify(newRecordings);
+    if (newData === previousDataRef.current) {
+      return false;
+    }
+    previousDataRef.current = newData;
+    return true;
+  };
 
   // Poll for active recordings
   useEffect(() => {
@@ -57,7 +68,9 @@ export default function RecordingStatus() {
         // Check if status directory exists
         if (!fs.existsSync(statusDir)) {
           fs.mkdirSync(statusDir, { recursive: true });
-          setActiveRecordings([]);
+          if (hasDataChanged([])) {
+            setActiveRecordings([]);
+          }
           setIsLoading(false);
           return;
         }
@@ -66,14 +79,25 @@ export default function RecordingStatus() {
         const files = fs.readdirSync(statusDir).filter((f) => f.endsWith(".json"));
 
         if (files.length === 0) {
-          setActiveRecordings([]);
+          if (hasDataChanged([])) {
+            setActiveRecordings([]);
+          }
           setIsLoading(false);
           return;
         }
 
+        // Sort files by modification time (newest first)
+        const sortedFiles = files.sort((a, b) => {
+          const aPath = path.join(statusDir, a);
+          const bPath = path.join(statusDir, b);
+          const aTime = fs.statSync(aPath).mtime.getTime();
+          const bTime = fs.statSync(bPath).mtime.getTime();
+          return bTime - aTime; // Newest first (descending order)
+        });
+
         const recordings: RecordingStatus[] = [];
 
-        for (const file of files) {
+        for (const file of sortedFiles) {
           try {
             const content = fs.readFileSync(path.join(statusDir, file), "utf8");
             const status: RecordingStatus = JSON.parse(content);
@@ -83,7 +107,10 @@ export default function RecordingStatus() {
           }
         }
 
-        setActiveRecordings(recordings);
+        // Only update state if data has actually changed
+        if (hasDataChanged(recordings)) {
+          setActiveRecordings(recordings);
+        }
         setIsLoading(false);
       } catch (err) {
         console.error("Error checking active recordings:", err);
@@ -95,7 +122,6 @@ export default function RecordingStatus() {
     // Initial check
     checkActiveRecordings();
 
-    // Poll every 500ms
     const interval = setInterval(checkActiveRecordings, 500);
 
     return () => clearInterval(interval);

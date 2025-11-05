@@ -17,7 +17,7 @@ import { useState, useEffect } from "react";
 import { spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
-import TranscriptionProgress from "./transcription-progress";
+import TranscriptionProgress from "./transcription-status";
 
 interface Preferences {
   pythonPath: string;
