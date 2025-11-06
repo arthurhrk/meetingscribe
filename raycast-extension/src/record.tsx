@@ -8,6 +8,8 @@ import {
   Detail,
   Icon,
   Color,
+  confirmAlert,
+  Alert,
 } from "@raycast/api";
 import { useState, useEffect } from "react";
 import { spawn } from "child_process";
@@ -226,6 +228,28 @@ export default function StartRecording() {
         message: "Please wait for current recording to finish",
       });
       return;
+    }
+
+    // Check if there's an external recording in progress
+    if (existingRecording) {
+      const confirmed = await confirmAlert({
+        title: "Recording Already in Progress",
+        message: `A recording is already running (${existingRecording.filename}).\n\nWhat would you like to do?`,
+        primaryAction: {
+          title: "View Progress",
+          style: Alert.ActionStyle.Default,
+        },
+        dismissAction: {
+          title: "Start New Recording",
+          style: Alert.ActionStyle.Destructive,
+        },
+      });
+
+      if (confirmed) {
+        // User chose "View Progress" - show the existing recording
+        return;
+      }
+      // User chose "Start New Recording" - continue with starting new one
     }
 
     try {
@@ -462,89 +486,6 @@ export default function StartRecording() {
     }
   }
 
-  // Render existing recording detected (not our session)
-  if (existingRecording && !isRecording) {
-    const progress = existingRecording.progress || 0;
-    const elapsed = existingRecording.elapsed || 0;
-    const duration = existingRecording.duration || 0;
-    const remaining = duration > 0 ? duration - elapsed : 0;
-    const isManualMode = duration === 0;
-
-    const progressBar = duration > 0
-      ? "█".repeat(Math.floor(progress / 5)) + "░".repeat(20 - Math.floor(progress / 5))
-      : "🔴 Recording (Manual Mode)";
-
-    const timeInfo = isManualMode
-      ? `${elapsed}s (No time limit)`
-      : `${elapsed}s / ${duration}s (${remaining}s remaining)`;
-
-    const markdown = `
-# 🔴 Recording in Progress
-
-${progressBar} ${duration > 0 ? `**${progress.toFixed(1)}%**` : ""}
-
-## Recording Info
-- **Filename**: ${existingRecording.filename}
-- **Time**: ${timeInfo}
-- **Quality**: ${existingRecording.quality_info?.name || existingRecording.quality}
-- **Device**: ${existingRecording.device || "N/A"}
-- **Audio**: ${existingRecording.sample_rate}Hz, ${existingRecording.channels}ch
-- **Audio Detected**: ${existingRecording.has_audio ? "✅ Yes" : "⏳ Waiting..."}
-- **Frames Captured**: ${existingRecording.frames_captured || 0}
-
-${!existingRecording.has_audio && elapsed > 3 ? "\n⚠️ **Warning**: No audio detected yet. Check if Teams is playing audio." : ""}
-
----
-
-*A recording started from another instance is already in progress*
-`;
-
-    return (
-      <Detail
-        markdown={markdown}
-        actions={
-          <ActionPanel>
-            <Action
-              title="⏹️ Stop This Recording"
-              icon={Icon.Stop}
-              style={Action.Style.Destructive}
-              onAction={() => stopRecording(existingRecording.session_id)}
-            />
-            <Action
-              title="📊 View in Recording Status"
-              icon={Icon.Eye}
-              onAction={() => {
-                // This will open Recording Status command if available
-                showToast({
-                  style: Toast.Style.Success,
-                  title: "Use Recording Status command",
-                  message: "Open 'Recording Status' to monitor this recording",
-                });
-              }}
-            />
-            <Action
-              title="Refresh"
-              icon={Icon.ArrowClockwise}
-              onAction={() => {
-                // Refresh detection
-                const activeRecordingFiles = getActiveRecordings(prefs.projectPath);
-                if (activeRecordingFiles.length > 0) {
-                  const mostRecentFile = activeRecordingFiles[activeRecordingFiles.length - 1];
-                  const status = readRecordingStatus(prefs.projectPath, mostRecentFile);
-                  if (status && status.status === "recording") {
-                    setExistingRecording(status);
-                  }
-                } else {
-                  setExistingRecording(null);
-                }
-              }}
-            />
-          </ActionPanel>
-        }
-      />
-    );
-  }
-
   // Render recording status view (our own session)
   if (isRecording && recordingStatus) {
     const progress = recordingStatus.progress || 0;
@@ -639,6 +580,41 @@ ${isManualMode ? "\n\n💡 **Tip**: Press **Stop Recording** button below when y
         </List.Dropdown>
       }
     >
+      {existingRecording && (
+        <List.Section title="🔴 Active Recording in Progress">
+          <List.Item
+            title={existingRecording.filename || "Recording"}
+            subtitle={`${existingRecording.elapsed || 0}s elapsed${(existingRecording.duration || 0) > 0 ? ` / ${existingRecording.duration}s` : " (no time limit)"}`}
+            icon="🔴"
+            accessories={[
+              {
+                text: existingRecording.has_audio ? "✅ Audio" : "⏳ No audio",
+              },
+            ]}
+            actions={
+              <ActionPanel>
+                <Action
+                  title="⏹️ Stop This Recording"
+                  icon={Icon.Stop}
+                  style={Action.Style.Destructive}
+                  onAction={() => stopRecording(existingRecording.session_id)}
+                />
+                <Action
+                  title="View in Recording Status"
+                  icon={Icon.Eye}
+                  onAction={() => {
+                    showToast({
+                      style: Toast.Style.Success,
+                      title: "Tip",
+                      message: "Open 'Recording Status' command for more details",
+                    });
+                  }}
+                />
+              </ActionPanel>
+            }
+          />
+        </List.Section>
+      )}
       <List.Section title="Recording Duration">
         {DURATION_PRESETS.map((preset) => {
           const selectedQualityObj = RECORDING_QUALITIES.find((q) => q.id === selectedQuality);
