@@ -112,22 +112,43 @@ export default function StartRecording() {
   const [recordingStatus, setRecordingStatus] = useState<RecordingStatus | null>(null);
   const [existingRecording, setExistingRecording] = useState<RecordingStatus | null>(null);
 
-  // Detect existing recordings on component mount
+  // Detect existing recordings on component mount and periodically while idle
   useEffect(() => {
     const detectExistingRecording = () => {
+      // Don't check if we're currently recording our own session
+      if (isRecording) {
+        return;
+      }
+
       const activeRecordingFiles = getActiveRecordings(prefs.projectPath);
       if (activeRecordingFiles.length > 0) {
         // Get the most recent active recording
         const mostRecentFile = activeRecordingFiles[activeRecordingFiles.length - 1];
         const status = readRecordingStatus(prefs.projectPath, mostRecentFile);
-        if (status && status.status === "recording") {
+
+        // Only show existing recording if:
+        // 1. Status is "recording"
+        // 2. Elapsed time > 2 seconds (filter out our own session that just started)
+        if (status && status.status === "recording" && (status.elapsed || 0) > 2) {
+          console.log("[Record] Detected existing recording:", status.session_id);
           setExistingRecording(status);
+        } else {
+          console.log("[Record] No active external recording detected");
+          setExistingRecording(null);
         }
+      } else {
+        setExistingRecording(null);
       }
     };
 
+    // Initial detection on mount
     detectExistingRecording();
-  }, [prefs.projectPath]);
+
+    // Poll for external recordings while showing quality selector (every 2 seconds)
+    const interval = setInterval(detectExistingRecording, 2000);
+
+    return () => clearInterval(interval);
+  }, [isRecording, prefs.projectPath]);
 
   // Monitor status file for real-time updates
   useEffect(() => {
