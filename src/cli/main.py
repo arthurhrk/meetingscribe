@@ -84,8 +84,14 @@ def quick_record(duration: int = 30, filename: Optional[str] = None, audio_forma
                 }))
                 return
 
+            # Handle manual mode (duration = -1)
+            # Convert to 120 minutes (7200 seconds) as practical limit for manual mode
+            max_duration = None if duration == -1 else duration
+            effective_duration = 7200 if duration == -1 else duration
+            is_manual_mode = duration == -1
+
             # Configure duration and format
-            recorder._config.max_duration = duration
+            recorder._config.max_duration = max_duration
             recorder._config.audio_format = audio_format.lower()
 
             logger.debug(f"========================================")
@@ -103,11 +109,12 @@ def quick_record(duration: int = 30, filename: Optional[str] = None, audio_forma
 
             # Write initial status with metadata
             quality_preset = RecordingQuality.get('professional')
+            initial_display_duration = 0 if is_manual_mode else duration
             status_file.write_text(json.dumps({
                 "status": "recording",
                 "session_id": session_id,
                 "filename": filename,
-                "duration": duration,
+                "duration": initial_display_duration,
                 "elapsed": 0,
                 "progress": 0,
                 "quality": "professional",
@@ -124,16 +131,33 @@ def quick_record(duration: int = 30, filename: Optional[str] = None, audio_forma
             }))
 
             # Update status every second
-            for i in range(duration):
+            for i in range(effective_duration):
                 time.sleep(1)
                 elapsed = int(time.time() - start_time)
-                progress = min(100, int((elapsed / duration) * 100))
+
+                # Check for stop signal file (for manual mode or graceful shutdown)
+                stop_signal_file = Path(settings.status_dir) / f"{session_id}.stop"
+                if stop_signal_file.exists():
+                    logger.info(f"Stop signal received for session {session_id}")
+                    try:
+                        stop_signal_file.unlink()  # Clean up signal file
+                    except Exception as e:
+                        logger.warning(f"Could not delete stop signal file: {e}")
+                    break
+
+                # Calculate progress based on mode
+                if is_manual_mode:
+                    progress = 0  # Manual mode doesn't show percentage
+                    display_duration = 0  # Indicate no time limit
+                else:
+                    progress = min(100, int((elapsed / duration) * 100))
+                    display_duration = duration
 
                 status_file.write_text(json.dumps({
                     "status": "recording",
                     "session_id": session_id,
                     "filename": filename,
-                    "duration": duration,
+                    "duration": display_duration,
                     "elapsed": elapsed,
                     "progress": progress,
                     "quality": "professional",

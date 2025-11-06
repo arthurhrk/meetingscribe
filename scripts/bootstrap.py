@@ -101,8 +101,10 @@ def main() -> int:
     # 4) Ensure storage folders
     rec_dir = repo_root / "storage" / "recordings"
     trn_dir = repo_root / "storage" / "transcriptions"
+    sig_dir = repo_root / "storage" / "signals"
     rec_dir.mkdir(parents=True, exist_ok=True)
     trn_dir.mkdir(parents=True, exist_ok=True)
+    sig_dir.mkdir(parents=True, exist_ok=True)
 
     # 6) Print next steps
     print("\n== Bootstrap complete ==")

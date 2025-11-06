@@ -378,12 +378,18 @@ export default function StartRecording() {
         message: "Finalizing audio file...",
       });
 
-      // Note: The new CLI doesn't support manual stop yet
-      // The recording will complete based on the duration specified
-      // For now, just kill the process if it's still running
-      if (activeRecordingProcess && !activeRecordingProcess.killed) {
-        activeRecordingProcess.kill();
+      // Create stop signal file for graceful shutdown
+      const signalsDir = path.join(prefs.projectPath, "storage", "signals");
+      const stopSignalPath = path.join(signalsDir, `${activeSessionId}.stop`);
+
+      // Ensure signals directory exists
+      if (!fs.existsSync(signalsDir)) {
+        fs.mkdirSync(signalsDir, { recursive: true });
       }
+
+      // Write empty stop signal file
+      fs.writeFileSync(stopSignalPath, "");
+      console.log("[Record] Stop signal file created:", stopSignalPath);
 
       // Wait a bit for stop signal to be processed
       setTimeout(() => {
@@ -392,8 +398,16 @@ export default function StartRecording() {
           title: "Stop Signal Sent",
           message: "Recording will finish shortly",
         });
-      }, 1000);
+      }, 500);
     } catch (error) {
+      console.error("[Record] Error stopping recording:", error);
+
+      // Fallback: kill process if signal fails
+      if (activeRecordingProcess && !activeRecordingProcess.killed) {
+        console.log("[Record] Fallback: Killing recording process");
+        activeRecordingProcess.kill();
+      }
+
       await showToast({
         style: Toast.Style.Failure,
         title: "Error Stopping",
