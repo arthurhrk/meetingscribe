@@ -27,7 +27,7 @@
                       {
                          "name":  "recording-status",
                          "title":  "Recording Status",
-                         "subtitle":  "MeetingScribe",
+                         "subtitle":  "check progress",
                          "description":  "Monitor active recordings in real-time",
                          "mode":  "view",
                          "keywords":  [
@@ -41,7 +41,7 @@
                      {
                          "name":  "recent",
                          "title":  "Recent Recordings",
-                         "subtitle":  "MeetingScribe",
+                         "subtitle":  "view past recordings",
                          "description":  "View and manage recent recordings",
                          "mode":  "view",
                          "keywords":  [
@@ -54,7 +54,7 @@
                      {
                          "name":  "transcription-status",
                          "title":  "Transcription Status",
-                         "subtitle":  "MeetingScribe",
+                         "subtitle":  "check previous transcripts",
                          "description":  "Monitor active transcriptions in real-time",
                          "mode":  "view",
                          "keywords":  [
