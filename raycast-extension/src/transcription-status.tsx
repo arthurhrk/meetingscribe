@@ -140,8 +140,8 @@ export default function TranscriptionProgress() {
 
   useEffect(() => {
     loadProgressStatus();
-    // Poll for updates every 500ms
-    const interval = setInterval(loadProgressStatus, 500);
+    // Poll for updates every 200ms for faster status updates (reduced from 500ms)
+    const interval = setInterval(loadProgressStatus, 200);
     return () => clearInterval(interval);
   }, []);
 

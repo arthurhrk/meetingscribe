@@ -297,9 +297,25 @@ export default function RecentRecordings() {
 
     // Generate session ID for progress tracking
     const sessionId = `transcribe_${Date.now()}`;
-    const statusFile = path.join(projectPath, "storage", "status", `${sessionId}.json`);
+    const statusDir = path.join(projectPath, "storage", "status");
+    const statusFile = path.join(statusDir, `${sessionId}.json`);
 
     try {
+      // Create initial status file BEFORE spawning Python process to avoid race condition
+      // This ensures the UI shows status immediately when it navigates to TranscriptionProgress
+      fs.mkdirSync(statusDir, { recursive: true });
+      fs.writeFileSync(
+        statusFile,
+        JSON.stringify({
+          step: "starting",
+          step_number: 0,
+          total_steps: 4,
+          progress: 0,
+          message: "Starting transcription...",
+        })
+      );
+      console.log(`[Transcription] Initial status file created: ${statusFile}`);
+
       const scriptPath = path.join(projectPath, "src", "transcriber.py");
 
       const args = [
@@ -341,7 +357,16 @@ export default function RecentRecordings() {
 
         if (code === 0) {
           try {
-            const result = JSON.parse(stdout);
+            // Extract JSON from stdout - Python may output text before the JSON response
+            // Find the last JSON line (starts with '{')
+            const lines = stdout.split('\n').reverse();
+            const jsonLine = lines.find(line => line.trim().startsWith('{'));
+
+            if (!jsonLine) {
+              throw new Error("No JSON response found in output");
+            }
+
+            const result = JSON.parse(jsonLine);
 
             if (result.success) {
               const successMsg = `Transcription Complete: Saved to ${path.basename(result.transcript_file)}`;
@@ -362,7 +387,7 @@ export default function RecentRecordings() {
               console.log(`[Transcription] Progress file preserved as history: ${statusFile}`);
             }
           } catch (e) {
-            const errorMsg = stdout || stderr;
+            const errorMsg = e instanceof Error ? e.message : (stdout || stderr || "Unknown error");
             console.error(`[Transcription] Error parsing response: ${errorMsg}`);
             showToast({
               style: Toast.Style.Failure,

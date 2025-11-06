@@ -266,7 +266,7 @@ def main():
 *   Analyze the raw transcription.
 *   Identify the main subjects, decisions, and action items.
 *   Organize these points into a summary with clear headings for each topic.
-*   Describe the key topics in the same language as identified in the raw transcription.
+*   Describe the key topics in the same language as identified in the raw transcription as long it is Spanish, Portuguese or English; otherwise, use English.
 *   Ensure no critical information is lost.
 
 Your entire response should be a single markdown document.'''

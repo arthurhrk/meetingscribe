@@ -581,11 +581,11 @@ def main():
         print("[ERROR] WASAPI not available - loopback functionalities are limited")
         
     except AudioDeviceError as e:
-        logger.error(f"Erro no sistema de áudio: {e}")
-        print(f"[ERROR] Erro no sistema de audio: {e}")
+        logger.error(f"Audio system error: {e}")
+        print(f"[ERROR] Audio system error: {e}")
         
     except Exception as e:
-        logger.error(f"Erro inesperado: {e}")
+        logger.error(f"Unexpected error: {e}")
         print(f"[ERROR] Unexpected error: {e}")
 
 
