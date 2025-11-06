@@ -13,6 +13,7 @@ import { useState, useEffect } from "react";
 import { spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
+import { createStopSignal, getActiveRecordings, readRecordingStatus } from "./signals";
 
 interface Preferences {
   pythonPath: string;
@@ -109,6 +110,24 @@ export default function StartRecording() {
   const [isRecording, setIsRecording] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [recordingStatus, setRecordingStatus] = useState<RecordingStatus | null>(null);
+  const [existingRecording, setExistingRecording] = useState<RecordingStatus | null>(null);
+
+  // Detect existing recordings on component mount
+  useEffect(() => {
+    const detectExistingRecording = () => {
+      const activeRecordingFiles = getActiveRecordings(prefs.projectPath);
+      if (activeRecordingFiles.length > 0) {
+        // Get the most recent active recording
+        const mostRecentFile = activeRecordingFiles[activeRecordingFiles.length - 1];
+        const status = readRecordingStatus(prefs.projectPath, mostRecentFile);
+        if (status && status.status === "recording") {
+          setExistingRecording(status);
+        }
+      }
+    };
+
+    detectExistingRecording();
+  }, [prefs.projectPath]);
 
   // Monitor status file for real-time updates
   useEffect(() => {
@@ -367,9 +386,10 @@ export default function StartRecording() {
     }
   }
 
-  // Stop manual recording function
-  async function stopManualRecording() {
-    if (!activeSessionId) return;
+  // Stop recording function (works for both manual and timed modes)
+  async function stopRecording(sessionIdToStop?: string) {
+    const idToStop = sessionIdToStop || activeSessionId;
+    if (!idToStop) return;
 
     try {
       await showToast({
@@ -378,18 +398,23 @@ export default function StartRecording() {
         message: "Finalizing audio file...",
       });
 
-      // Create stop signal file for graceful shutdown
-      const signalsDir = path.join(prefs.projectPath, "storage", "signals");
-      const stopSignalPath = path.join(signalsDir, `${activeSessionId}.stop`);
+      // Use shared signal utility to create stop signal
+      const success = createStopSignal(prefs.projectPath, idToStop);
 
-      // Ensure signals directory exists
-      if (!fs.existsSync(signalsDir)) {
-        fs.mkdirSync(signalsDir, { recursive: true });
+      if (!success) {
+        // Fallback: kill process if signal creation fails
+        if (activeRecordingProcess && !activeRecordingProcess.killed) {
+          console.log("[Record] Fallback: Killing recording process");
+          activeRecordingProcess.kill();
+        }
+
+        await showToast({
+          style: Toast.Style.Failure,
+          title: "Error Stopping",
+          message: "Could not create stop signal",
+        });
+        return;
       }
-
-      // Write empty stop signal file
-      fs.writeFileSync(stopSignalPath, "");
-      console.log("[Record] Stop signal file created:", stopSignalPath);
 
       // Wait a bit for stop signal to be processed
       setTimeout(() => {
@@ -416,7 +441,90 @@ export default function StartRecording() {
     }
   }
 
-  // Render recording status view
+  // Render existing recording detected (not our session)
+  if (existingRecording && !isRecording) {
+    const progress = existingRecording.progress || 0;
+    const elapsed = existingRecording.elapsed || 0;
+    const duration = existingRecording.duration || 0;
+    const remaining = duration > 0 ? duration - elapsed : 0;
+    const isManualMode = duration === 0;
+
+    const progressBar = duration > 0
+      ? "█".repeat(Math.floor(progress / 5)) + "░".repeat(20 - Math.floor(progress / 5))
+      : "🔴 Recording (Manual Mode)";
+
+    const timeInfo = isManualMode
+      ? `${elapsed}s (No time limit)`
+      : `${elapsed}s / ${duration}s (${remaining}s remaining)`;
+
+    const markdown = `
+# 🔴 Recording in Progress
+
+${progressBar} ${duration > 0 ? `**${progress.toFixed(1)}%**` : ""}
+
+## Recording Info
+- **Filename**: ${existingRecording.filename}
+- **Time**: ${timeInfo}
+- **Quality**: ${existingRecording.quality_info?.name || existingRecording.quality}
+- **Device**: ${existingRecording.device || "N/A"}
+- **Audio**: ${existingRecording.sample_rate}Hz, ${existingRecording.channels}ch
+- **Audio Detected**: ${existingRecording.has_audio ? "✅ Yes" : "⏳ Waiting..."}
+- **Frames Captured**: ${existingRecording.frames_captured || 0}
+
+${!existingRecording.has_audio && elapsed > 3 ? "\n⚠️ **Warning**: No audio detected yet. Check if Teams is playing audio." : ""}
+
+---
+
+*A recording started from another instance is already in progress*
+`;
+
+    return (
+      <Detail
+        markdown={markdown}
+        actions={
+          <ActionPanel>
+            <Action
+              title="⏹️ Stop This Recording"
+              icon={Icon.Stop}
+              style={Action.Style.Destructive}
+              onAction={() => stopRecording(existingRecording.session_id)}
+            />
+            <Action
+              title="📊 View in Recording Status"
+              icon={Icon.Eye}
+              onAction={() => {
+                // This will open Recording Status command if available
+                showToast({
+                  style: Toast.Style.Success,
+                  title: "Use Recording Status command",
+                  message: "Open 'Recording Status' to monitor this recording",
+                });
+              }}
+            />
+            <Action
+              title="Refresh"
+              icon={Icon.ArrowClockwise}
+              onAction={() => {
+                // Refresh detection
+                const activeRecordingFiles = getActiveRecordings(prefs.projectPath);
+                if (activeRecordingFiles.length > 0) {
+                  const mostRecentFile = activeRecordingFiles[activeRecordingFiles.length - 1];
+                  const status = readRecordingStatus(prefs.projectPath, mostRecentFile);
+                  if (status && status.status === "recording") {
+                    setExistingRecording(status);
+                  }
+                } else {
+                  setExistingRecording(null);
+                }
+              }}
+            />
+          </ActionPanel>
+        }
+      />
+    );
+  }
+
+  // Render recording status view (our own session)
   if (isRecording && recordingStatus) {
     const progress = recordingStatus.progress || 0;
     const elapsed = recordingStatus.elapsed || 0;
@@ -465,7 +573,15 @@ ${isManualMode ? "\n\n💡 **Tip**: Press **Stop Recording** button below when y
                 title="⏹️ Stop Recording"
                 icon={Icon.Stop}
                 style={Action.Style.Destructive}
-                onAction={stopManualRecording}
+                onAction={() => stopRecording()}
+              />
+            )}
+            {!isManualMode && (
+              <Action
+                title="⏹️ Stop Recording Early"
+                icon={Icon.Stop}
+                style={Action.Style.Destructive}
+                onAction={() => stopRecording()}
               />
             )}
             <Action

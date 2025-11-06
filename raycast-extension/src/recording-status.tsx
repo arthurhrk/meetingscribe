@@ -12,6 +12,7 @@ import {
 import { useState, useEffect, useRef } from "react";
 import * as fs from "fs";
 import * as path from "path";
+import { createStopSignal } from "./signals";
 
 interface Preferences {
   pythonPath: string;
@@ -46,7 +47,10 @@ export default function RecordingStatus() {
   const [activeRecordings, setActiveRecordings] = useState<RecordingStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [stoppingSessionId, setStoppingSessionId] = useState<string | null>(null);
   const previousDataRef = useRef<string>("");
+
+  const { projectPath } = getPreferenceValues<Preferences>();
 
   // Deep equality check - compare JSON serialization
   const hasDataChanged = (newRecordings: RecordingStatus[]): boolean => {
@@ -58,9 +62,51 @@ export default function RecordingStatus() {
     return true;
   };
 
+  // Stop recording function
+  async function stopRecording(sessionId: string) {
+    setStoppingSessionId(sessionId);
+    try {
+      await showToast({
+        style: Toast.Style.Animated,
+        title: "Stopping Recording",
+        message: "Sending stop signal...",
+      });
+
+      const success = createStopSignal(projectPath, sessionId);
+
+      if (!success) {
+        await showToast({
+          style: Toast.Style.Failure,
+          title: "Error Stopping",
+          message: "Could not create stop signal",
+        });
+        setStoppingSessionId(null);
+        return;
+      }
+
+      await showToast({
+        style: Toast.Style.Success,
+        title: "Stop Signal Sent",
+        message: "Recording will finish shortly",
+      });
+
+      // Refresh after a short delay to show updated status
+      setTimeout(() => {
+        setStoppingSessionId(null);
+      }, 1000);
+    } catch (error) {
+      console.error("[RecordingStatus] Error stopping recording:", error);
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "Error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+      setStoppingSessionId(null);
+    }
+  }
+
   // Poll for active recordings
   useEffect(() => {
-    const { projectPath } = getPreferenceValues<Preferences>();
     const statusDir = path.join(projectPath, "storage", "status");
 
     const checkActiveRecordings = () => {
@@ -228,6 +274,14 @@ ${warningMessage}
       markdown={fullMarkdown}
       actions={
         <ActionPanel>
+          {activeRecordings.length > 0 && activeRecordings[0].status === "recording" && (
+            <Action
+              title="⏹️ Stop This Recording"
+              icon={Icon.Stop}
+              style={Action.Style.Destructive}
+              onAction={() => stopRecording(activeRecordings[0].session_id)}
+            />
+          )}
           <Action
             title="Refresh Status"
             icon={Icon.ArrowClockwise}
@@ -240,7 +294,6 @@ ${warningMessage}
               title="Open Recordings Folder"
               icon={Icon.Folder}
               onAction={() => {
-                const { projectPath } = getPreferenceValues<Preferences>();
                 const recordingsPath = path.join(projectPath, "storage", "recordings");
                 open(recordingsPath);
               }}
