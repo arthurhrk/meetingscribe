@@ -136,7 +136,9 @@ def quick_record(duration: int = 30, filename: Optional[str] = None, audio_forma
                 elapsed = int(time.time() - start_time)
 
                 # Check for stop signal file (for manual mode or graceful shutdown)
-                stop_signal_file = Path(settings.status_dir) / f"{session_id}.stop"
+                # Frontend writes signals to storage/signals/, not storage/status/
+                signals_dir = Path(settings.storage_dir) / "signals"
+                stop_signal_file = signals_dir / f"{session_id}.stop"
                 if stop_signal_file.exists():
                     logger.info(f"Stop signal received for session {session_id}")
                     try:
