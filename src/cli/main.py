@@ -12,10 +12,6 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional
 
-from loguru import logger
-from audio import AudioRecorder, AudioRecorderError, RecordingQuality
-from config import settings
-
 
 def quick_record(duration: int = 30, filename: Optional[str] = None, audio_format: str = "wav") -> dict:
     """
@@ -30,6 +26,11 @@ def quick_record(duration: int = 30, filename: Optional[str] = None, audio_forma
     Returns:
         dict: Status and recording info
     """
+    # Lazy import - only load when actually recording
+    from loguru import logger
+    from config import settings
+    from audio import AudioRecorder, AudioRecorderError, RecordingQuality
+
     logger.debug(f"========================================")
     logger.debug(f"quick_record() called with:")
     logger.debug(f"  duration: {duration}")
@@ -207,49 +208,24 @@ def quick_record(duration: int = 30, filename: Optional[str] = None, audio_forma
 def main():
     """Main CLI entry point"""
 
-    logger.remove()
-    from config import settings
-    logger.add(
-        settings.logs_dir / "meetingscribe.log",
-        rotation="10 MB",
-        retention="1 month",
-        level=settings.log_level,
-        format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {message}"
-    )
-
-    print("=" * 60)
-    print("MeetingScribe - Audio Recording")
-    print("=" * 60)
-    print()
-
     # Check if called with arguments (Raycast integration)
     if len(sys.argv) > 1:
         command = sys.argv[1]
 
         if command == "record":
-            # Quick record mode
+            # Quick record mode - return JSON IMMEDIATELY before logging setup
             duration = int(sys.argv[2]) if len(sys.argv) > 2 else 30
             audio_format = sys.argv[3] if len(sys.argv) > 3 else "wav"
-
-            logger.debug(f"========================================")
-            logger.debug(f"CLI Command: record")
-            logger.debug(f"Full sys.argv: {sys.argv}")
-            logger.debug(f"Arguments count: {len(sys.argv)}")
-            logger.debug(f"Duration (argv[2]): {sys.argv[2] if len(sys.argv) > 2 else 'NOT PROVIDED'}")
-            logger.debug(f"Audio Format (argv[3]): {sys.argv[3] if len(sys.argv) > 3 else 'NOT PROVIDED'}")
-            logger.debug(f"Parsed duration: {duration}")
-            logger.debug(f"Parsed audio_format: {audio_format}")
-            logger.debug(f"========================================")
 
             result, thread = quick_record(duration=duration, audio_format=audio_format)
             print(json.dumps(result), flush=True)
 
-            # Wait for recording to complete
+            # Wait for recording to complete (in background)
             thread.join()
             return
 
         elif command == "status":
-            # System status check
+            # System status check - lazy import
             from audio import DeviceManager
 
             try:
@@ -281,7 +257,24 @@ def main():
                 print(json.dumps(result), flush=True)
                 return
 
-    # Interactive mode
+    # Interactive mode - only initialize logging if running interactively
+    from loguru import logger
+    from config import settings
+
+    logger.remove()
+    logger.add(
+        settings.logs_dir / "meetingscribe.log",
+        rotation="10 MB",
+        retention="1 month",
+        level=settings.log_level,
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {message}"
+    )
+
+    print("=" * 60)
+    print("MeetingScribe - Audio Recording")
+    print("=" * 60)
+    print()
+
     print("Interactive mode coming soon...")
     print("Use: python -m cli record <duration>")
     print("     python -m cli status")

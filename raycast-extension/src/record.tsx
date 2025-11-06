@@ -342,19 +342,19 @@ export default function StartRecording() {
         }
       });
 
-      // Safety timeout
+      // Safety timeout (increased to 10s as fallback)
       setTimeout(() => {
         if (!jsonReceived) {
-          console.error("[Record] Timeout: No JSON response received within 8 seconds");
+          console.error("[Record] Timeout: No JSON response received within 10 seconds");
           setIsRecording(false);
           setSessionId(null);
           showToast({
             style: Toast.Style.Failure,
             title: "Timeout",
-            message: "Recording failed to start within 8 seconds",
+            message: "Recording failed to start within 10 seconds",
           });
         }
-      }, 8000);
+      }, 10000);
     } catch (error) {
       setIsRecording(false);
       setSessionId(null);
