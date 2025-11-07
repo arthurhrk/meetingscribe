@@ -12,12 +12,8 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional
 
-from loguru import logger
-from audio import AudioRecorder, AudioRecorderError
-from config import settings
 
-
-def quick_record(duration: int = 30, filename: Optional[str] = None) -> dict:
+def quick_record(duration: int = 30, filename: Optional[str] = None, audio_format: str = "wav") -> dict:
     """
     Quick recording function for Raycast integration.
     Returns JSON immediately, continues recording in background.
@@ -25,15 +21,31 @@ def quick_record(duration: int = 30, filename: Optional[str] = None) -> dict:
     Args:
         duration: Recording duration in seconds
         filename: Optional custom filename
+        audio_format: Audio format ('wav' or 'm4a')
 
     Returns:
         dict: Status and recording info
     """
-    # Generate identifiers
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Lazy import - only load when actually recording
+    from loguru import logger
+    from config import settings
+    from audio import AudioRecorder, AudioRecorderError, RecordingQuality
+
+    logger.debug(f"========================================")
+    logger.debug(f"quick_record() called with:")
+    logger.debug(f"  duration: {duration}")
+    logger.debug(f"  filename: {filename}")
+    logger.debug(f"  audio_format: {audio_format}")
+    logger.debug(f"========================================")
+
+    # Generate identifiers using local timezone (Windows-compatible)
+    local_now = datetime.now().astimezone()
+    timestamp = local_now.strftime("%Y%m%d_%H%M%S")
     session_id = f"rec-{timestamp}"
     if not filename:
-        filename = f"recording_{timestamp}.wav"
+        ext = audio_format.lower() if audio_format.lower() in ['wav', 'm4a'] else 'wav'
+        filename = f"recording_{timestamp}.{ext}"
+        logger.debug(f"Generated filename: {filename} (format: {audio_format})")
 
     filepath = Path(settings.recordings_dir) / filename
     status_file = Path(settings.status_dir) / f"{session_id}.json"
@@ -72,36 +84,95 @@ def quick_record(duration: int = 30, filename: Optional[str] = None) -> dict:
                 }))
                 return
 
-            # Configure duration
-            recorder._config.max_duration = duration
+            # Handle manual mode (duration = -1)
+            # Convert to 120 minutes (7200 seconds) as practical limit for manual mode
+            max_duration = None if duration == -1 else duration
+            effective_duration = 7200 if duration == -1 else duration
+            is_manual_mode = duration == -1
+
+            # Configure duration and format
+            recorder._config.max_duration = max_duration
+            recorder._config.audio_format = audio_format.lower()
+
+            logger.debug(f"========================================")
+            logger.debug(f"Recorder configuration:")
+            logger.debug(f"  max_duration: {recorder._config.max_duration}")
+            logger.debug(f"  audio_format: {recorder._config.audio_format}")
+            logger.debug(f"  device: {recorder._config.device.name if recorder._config.device else 'None'}")
+            logger.debug(f"  sample_rate: {recorder._config.sample_rate}")
+            logger.debug(f"  channels: {recorder._config.channels}")
+            logger.debug(f"========================================")
 
             # Start recording
             recorder.start_recording(filename=filename)
-            logger.info(f"Recording started: {filename} ({duration}s)")
+            logger.info(f"Recording started: {filename} ({duration}s, format: {audio_format})")
 
-            # Write initial status
+            # Write initial status with metadata
+            quality_preset = RecordingQuality.get('professional')
+            initial_display_duration = 0 if is_manual_mode else duration
             status_file.write_text(json.dumps({
                 "status": "recording",
                 "session_id": session_id,
                 "filename": filename,
-                "duration": duration,
+                "duration": initial_display_duration,
                 "elapsed": 0,
-                "progress": 0
+                "progress": 0,
+                "quality": "professional",
+                "quality_info": {
+                    "name": quality_preset['name'],
+                    "description": quality_preset['description'],
+                    "size_per_min": quality_preset['size_per_min']
+                },
+                "device": recorder.get_device_name(),
+                "sample_rate": recorder.get_sample_rate(),
+                "channels": recorder.get_channels(),
+                "frames_captured": 0,
+                "has_audio": False
             }))
 
             # Update status every second
-            for i in range(duration):
+            for i in range(effective_duration):
                 time.sleep(1)
                 elapsed = int(time.time() - start_time)
-                progress = min(100, int((elapsed / duration) * 100))
+
+                # Check for stop signal file (for manual mode or graceful shutdown)
+                # Frontend writes signals to storage/signals/, not storage/status/
+                signals_dir = Path(settings.storage_dir) / "signals"
+                stop_signal_file = signals_dir / f"{session_id}.stop"
+                if stop_signal_file.exists():
+                    logger.info(f"Stop signal received for session {session_id}")
+                    try:
+                        stop_signal_file.unlink()  # Clean up signal file
+                    except Exception as e:
+                        logger.warning(f"Could not delete stop signal file: {e}")
+                    break
+
+                # Calculate progress based on mode
+                if is_manual_mode:
+                    progress = 0  # Manual mode doesn't show percentage
+                    display_duration = 0  # Indicate no time limit
+                else:
+                    progress = min(100, int((elapsed / duration) * 100))
+                    display_duration = duration
 
                 status_file.write_text(json.dumps({
                     "status": "recording",
                     "session_id": session_id,
                     "filename": filename,
-                    "duration": duration,
+                    "duration": display_duration,
                     "elapsed": elapsed,
-                    "progress": progress
+                    "progress": progress,
+                    "quality": "professional",
+                    "quality_info": {
+                        "name": quality_preset['name'],
+                        "description": quality_preset['description'],
+                        "size_per_min": quality_preset['size_per_min']
+                    },
+                    "device": recorder.get_device_name(),
+                    "sample_rate": recorder.get_sample_rate(),
+                    "channels": recorder.get_channels(),
+                    "frames_captured": recorder.get_frames_captured(),
+                    "has_audio": recorder.has_audio_detected()
                 }))
 
             # Stop recording
@@ -116,13 +187,24 @@ def quick_record(duration: int = 30, filename: Optional[str] = None) -> dict:
             # Get file size
             file_size_mb = round(filepath.stat().st_size / (1024 * 1024), 2) if filepath.exists() else 0
 
-            # Write completion status
+            # Write completion status with all metadata
             status_file.write_text(json.dumps({
                 "status": "completed",
                 "session_id": session_id,
                 "filename": filename,
                 "duration": duration,
-                "file_size_mb": file_size_mb
+                "file_size_mb": file_size_mb,
+                "quality": "professional",
+                "quality_info": {
+                    "name": quality_preset['name'],
+                    "description": quality_preset['description'],
+                    "size_per_min": quality_preset['size_per_min']
+                },
+                "device": recorder.get_device_name(),
+                "sample_rate": recorder.get_sample_rate(),
+                "channels": recorder.get_channels(),
+                "frames_captured": recorder.get_frames_captured(),
+                "has_audio": recorder.has_audio_detected()
             }))
 
             logger.info(f"Status updated to completed: {file_size_mb}MB")
@@ -152,41 +234,24 @@ def quick_record(duration: int = 30, filename: Optional[str] = None) -> dict:
 def main():
     """Main CLI entry point"""
 
-    # Disable console logging when called with arguments (Raycast/CLI mode)
-    # This prevents log messages from appearing as "errors" in Raycast
-    if len(sys.argv) > 1:
-        # Remove console handler, keep only file logging
-        logger.remove()
-        from config import settings
-        logger.add(
-            settings.logs_dir / "meetingscribe.log",
-            rotation="10 MB",
-            retention="1 month",
-            level=settings.log_level,
-            format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {message}"
-        )
-
-    print("=" * 60)
-    print("MeetingScribe - Teams Recording")
-    print("=" * 60)
-    print()
-
     # Check if called with arguments (Raycast integration)
     if len(sys.argv) > 1:
         command = sys.argv[1]
 
         if command == "record":
-            # Quick record mode
+            # Quick record mode - return JSON IMMEDIATELY before logging setup
             duration = int(sys.argv[2]) if len(sys.argv) > 2 else 30
-            result, thread = quick_record(duration=duration)
+            audio_format = sys.argv[3] if len(sys.argv) > 3 else "wav"
+
+            result, thread = quick_record(duration=duration, audio_format=audio_format)
             print(json.dumps(result), flush=True)
 
-            # Wait for recording to complete
+            # Wait for recording to complete (in background)
             thread.join()
             return
 
         elif command == "status":
-            # System status check
+            # System status check - lazy import
             from audio import DeviceManager
 
             try:
@@ -218,7 +283,24 @@ def main():
                 print(json.dumps(result), flush=True)
                 return
 
-    # Interactive mode
+    # Interactive mode - only initialize logging if running interactively
+    from loguru import logger
+    from config import settings
+
+    logger.remove()
+    logger.add(
+        settings.logs_dir / "meetingscribe.log",
+        rotation="10 MB",
+        retention="1 month",
+        level=settings.log_level,
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {message}"
+    )
+
+    print("=" * 60)
+    print("MeetingScribe - Audio Recording")
+    print("=" * 60)
+    print()
+
     print("Interactive mode coming soon...")
     print("Use: python -m cli record <duration>")
     print("     python -m cli status")

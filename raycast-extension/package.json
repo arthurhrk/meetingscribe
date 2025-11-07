@@ -2,7 +2,7 @@
     "$schema":  "https://www.raycast.com/schemas/extension.json",
     "name":  "meetingscribe",
     "title":  "MeetingScribe",
-    "description":  "Record Microsoft Teams meetings with professional-quality audio using WASAPI loopback capture.",
+    "description":  "Record computer audio with professional-quality audio using WASAPI loopback capture.",
     "icon":  "icon.png",
     "author":  "Arthurhrk",
     "license":  "MIT",
@@ -15,35 +15,19 @@
                      {
                          "name":  "record",
                          "title":  "Start Recording",
-                         "subtitle":  "MeetingScribe",
-                         "description":  "Record Teams meeting audio with high quality",
+                         "subtitle":  "record audio",
+                         "description":  "Record computer audio with high quality",
                          "mode":  "view",
                          "keywords":  [
                                           "record",
                                           "audio",
-                                          "meeting",
-                                          "teams",
                                           "wasapi"
                                       ]
                      },
-                     {
-                         "name":  "import-google",
-                         "title":  "Transcribe Audio",
-                         "subtitle":  "MeetingScribe",
-                         "description":  "Transcribe a recording using Google Gemini",
-                         "mode":  "view",
-                         "keywords":  [
-                                          "import",
-                                          "google",
-                                          "gemini",
-                                          "transcription",
-                                          "ai"
-                                      ]
-                     },
-                     {
+                      {
                          "name":  "recording-status",
                          "title":  "Recording Status",
-                         "subtitle":  "MeetingScribe",
+                         "subtitle":  "check progress",
                          "description":  "Monitor active recordings in real-time",
                          "mode":  "view",
                          "keywords":  [
@@ -57,7 +41,7 @@
                      {
                          "name":  "recent",
                          "title":  "Recent Recordings",
-                         "subtitle":  "MeetingScribe",
+                         "subtitle":  "view past recordings",
                          "description":  "View and manage recent recordings",
                          "mode":  "view",
                          "keywords":  [
@@ -68,30 +52,18 @@
                                       ]
                      },
                      {
-                         "name":  "transcript-status",
-                         "title":  "Transcript Status",
-                         "subtitle":  "MeetingScribe",
-                         "description":  "Monitor active transcriptions and view results",
+                         "name":  "transcription-status",
+                         "title":  "Transcription Status",
+                         "subtitle":  "check previous transcripts",
+                         "description":  "Monitor active transcriptions in real-time",
                          "mode":  "view",
                          "keywords":  [
                                           "transcript",
                                           "transcription",
-                                          "status",
+                                          "progress",
+                                          "monitor",
                                           "gemini",
-                                          "progress"
-                                      ]
-                     },
-                     {
-                         "name":  "status",
-                         "title":  "System Status",
-                         "subtitle":  "MeetingScribe",
-                         "description":  "Check audio devices and system health",
-                         "mode":  "view",
-                         "keywords":  [
-                                          "status",
-                                          "system",
-                                          "devices",
-                                          "health"
+                                          "status"
                                       ]
                      }
                  ],
@@ -138,6 +110,24 @@
                                          {
                                              "title":  "Gemini 1.5 Pro (More Accurate)",
                                              "value":  "models/gemini-1.5-pro"
+                                         }
+                                     ]
+                        },
+                        {
+                            "name":  "audioFormat",
+                            "title":  "Audio Format",
+                            "description":  "Choose the audio format for recording (WAV is uncompressed, M4A is compressed)",
+                            "type":  "dropdown",
+                            "default":  "wav",
+                            "required":  false,
+                            "data":  [
+                                         {
+                                             "title":  "WAV (Uncompressed)",
+                                             "value":  "wav"
+                                         },
+                                         {
+                                             "title":  "M4A (Compressed)",
+                                             "value":  "m4a"
                                          }
                                      ]
                         },

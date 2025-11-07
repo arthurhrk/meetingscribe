@@ -8,15 +8,19 @@ import {
   Detail,
   Icon,
   Color,
+  confirmAlert,
+  Alert,
 } from "@raycast/api";
 import { useState, useEffect } from "react";
 import { spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
+import { createStopSignal, getActiveRecordings, readRecordingStatus } from "./signals";
 
 interface Preferences {
   pythonPath: string;
   projectPath: string;
+  audioFormat?: string;
 }
 
 interface RecordingQuality {
@@ -91,11 +95,11 @@ const DURATION_PRESETS = [
   { value: 30, label: "30 seconds", icon: Icon.Clock },
   { value: 60, label: "1 minute", icon: Icon.Clock },
   { value: 120, label: "2 minutes", icon: Icon.Clock },
-  { value: 300, label: "5 minutes", icon: Icon.Video },
-  { value: 600, label: "10 minutes", icon: Icon.Video },
-  { value: 900, label: "15 minutes", icon: Icon.Video },
-  { value: 1800, label: "30 minutes", icon: Icon.Video },
-  { value: 3600, label: "60 minutes", icon: Icon.Video },
+  { value: 300, label: "5 minutes", icon: Icon.Clock },
+  { value: 600, label: "10 minutes", icon: Icon.Clock },
+  { value: 900, label: "15 minutes", icon: Icon.Clock },
+  { value: 1800, label: "30 minutes", icon: Icon.Clock },
+  { value: 3600, label: "60 minutes", icon: Icon.Clock },
 ];
 
 // Active recording state
@@ -108,6 +112,45 @@ export default function StartRecording() {
   const [isRecording, setIsRecording] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [recordingStatus, setRecordingStatus] = useState<RecordingStatus | null>(null);
+  const [existingRecording, setExistingRecording] = useState<RecordingStatus | null>(null);
+
+  // Detect existing recordings on component mount and periodically while idle
+  useEffect(() => {
+    const detectExistingRecording = () => {
+      // Don't check if we're currently recording our own session
+      if (isRecording) {
+        return;
+      }
+
+      const activeRecordingFiles = getActiveRecordings(prefs.projectPath);
+      if (activeRecordingFiles.length > 0) {
+        // Get the most recent active recording
+        const mostRecentFile = activeRecordingFiles[activeRecordingFiles.length - 1];
+        const status = readRecordingStatus(prefs.projectPath, mostRecentFile);
+
+        // Only show existing recording if:
+        // 1. Status is "recording"
+        // 2. Elapsed time > 2 seconds (filter out our own session that just started)
+        if (status && status.status === "recording" && (status.elapsed || 0) > 2) {
+          console.log("[Record] Detected existing recording:", status.session_id);
+          setExistingRecording(status);
+        } else {
+          console.log("[Record] No active external recording detected");
+          setExistingRecording(null);
+        }
+      } else {
+        setExistingRecording(null);
+      }
+    };
+
+    // Initial detection on mount
+    detectExistingRecording();
+
+    // Poll for external recordings while showing quality selector (every 2 seconds)
+    const interval = setInterval(detectExistingRecording, 2000);
+
+    return () => clearInterval(interval);
+  }, [isRecording, prefs.projectPath]);
 
   // Monitor status file for real-time updates
   useEffect(() => {
@@ -187,8 +230,41 @@ export default function StartRecording() {
       return;
     }
 
+    // Check if there's an external recording in progress
+    if (existingRecording) {
+      const confirmed = await confirmAlert({
+        title: "Recording Already in Progress",
+        message: `A recording is already running (${existingRecording.filename}).\n\nWhat would you like to do?`,
+        primaryAction: {
+          title: "View Progress",
+          style: Alert.ActionStyle.Default,
+        },
+        dismissAction: {
+          title: "Start New Recording",
+          style: Alert.ActionStyle.Destructive,
+        },
+      });
+
+      if (confirmed) {
+        // User chose "View Progress" - show the existing recording
+        return;
+      }
+      // User chose "Start New Recording" - continue with starting new one
+    }
+
     try {
       setIsRecording(true);
+
+      // Debug: Print all preferences
+      console.log("[Record] ========== PREFERENCES DEBUG ==========");
+      console.log("[Record] prefs object:", JSON.stringify(prefs));
+      console.log("[Record] prefs.pythonPath:", prefs.pythonPath);
+      console.log("[Record] prefs.projectPath:", prefs.projectPath);
+      console.log("[Record] prefs.audioFormat:", prefs.audioFormat);
+      console.log("[Record] All preference keys:", Object.keys(prefs));
+      console.log("[Record] All preference values:", Object.values(prefs));
+      console.log("[Record] Type of prefs:", typeof prefs);
+      console.log("[Record] ==========================================");
 
       // Validate paths
       if (!prefs.projectPath || !fs.existsSync(prefs.projectPath)) {
@@ -211,13 +287,34 @@ export default function StartRecording() {
         message: toastMessage,
       });
 
-      // Start recording process using the new CLI interface
-      // Command: python -m cli record <duration>
-      const args = ["-m", "cli", "record", duration.toString()];
+      // Get audio format from preferences (default to 'wav' if not set)
+      const audioFormat = (prefs.audioFormat && prefs.audioFormat !== '') ? prefs.audioFormat : "wav";
 
-      console.log("[Record] Starting Python process:", prefs.pythonPath, args.join(" "));
-      console.log("[Record] Working directory:", prefs.projectPath);
+      console.log("[Record] audioFormat selected:", audioFormat);
+      console.log("[Record] prefs.audioFormat value:", prefs.audioFormat);
+      console.log("[Record] audioFormat is truthy:", !!prefs.audioFormat);
+
+      // Start recording process using the new CLI interface
+      // Command: python -m cli record <duration> <format>
+      const args = ["-m", "cli", "record", duration.toString(), audioFormat];
+
+      const fullCommand = `${prefs.pythonPath} ${args.join(" ")}`;
+      console.log("[Record] ========================================");
+      console.log("[Record] Full Command:", fullCommand);
+      console.log("[Record] Python Path:", prefs.pythonPath);
+      console.log("[Record] Arguments:", args);
+      console.log("[Record] Arguments (JSON):", JSON.stringify(args));
+      console.log("[Record] Working Directory:", prefs.projectPath);
+      console.log("[Record] Audio Format Preference (prefs.audioFormat):", prefs.audioFormat);
+      console.log("[Record] Audio Format (resolved):", audioFormat);
+      console.log("[Record] Duration:", duration);
+      console.log("[Record] Duration Type:", typeof duration);
       console.log("[Record] PYTHONPATH:", path.join(prefs.projectPath, "src"));
+      console.log("[Record] ========================================");
+
+      console.log("[Record] About to spawn with args:", args);
+      console.log("[Record] Args length:", args.length);
+      args.forEach((arg, i) => console.log(`[Record] args[${i}]:`, arg));
 
       const child = spawn(prefs.pythonPath, args, {
         cwd: prefs.projectPath,
@@ -226,6 +323,8 @@ export default function StartRecording() {
         stdio: ["ignore", "pipe", "pipe"],
         env: { ...process.env, PYTHONPATH: path.join(prefs.projectPath, "src") },
       });
+
+      console.log("[Record] Process spawned. Child PID:", child.pid);
 
       activeRecordingProcess = child;
 
@@ -307,19 +406,19 @@ export default function StartRecording() {
         }
       });
 
-      // Safety timeout
+      // Safety timeout (increased to 10s as fallback)
       setTimeout(() => {
         if (!jsonReceived) {
-          console.error("[Record] Timeout: No JSON response received within 8 seconds");
+          console.error("[Record] Timeout: No JSON response received within 10 seconds");
           setIsRecording(false);
           setSessionId(null);
           showToast({
             style: Toast.Style.Failure,
             title: "Timeout",
-            message: "Recording failed to start within 8 seconds",
+            message: "Recording failed to start within 10 seconds",
           });
         }
-      }, 8000);
+      }, 10000);
     } catch (error) {
       setIsRecording(false);
       setSessionId(null);
@@ -332,9 +431,10 @@ export default function StartRecording() {
     }
   }
 
-  // Stop manual recording function
-  async function stopManualRecording() {
-    if (!activeSessionId) return;
+  // Stop recording function (works for both manual and timed modes)
+  async function stopRecording(sessionIdToStop?: string) {
+    const idToStop = sessionIdToStop || activeSessionId;
+    if (!idToStop) return;
 
     try {
       await showToast({
@@ -343,11 +443,22 @@ export default function StartRecording() {
         message: "Finalizing audio file...",
       });
 
-      // Note: The new CLI doesn't support manual stop yet
-      // The recording will complete based on the duration specified
-      // For now, just kill the process if it's still running
-      if (activeRecordingProcess && !activeRecordingProcess.killed) {
-        activeRecordingProcess.kill();
+      // Use shared signal utility to create stop signal
+      const success = createStopSignal(prefs.projectPath, idToStop);
+
+      if (!success) {
+        // Fallback: kill process if signal creation fails
+        if (activeRecordingProcess && !activeRecordingProcess.killed) {
+          console.log("[Record] Fallback: Killing recording process");
+          activeRecordingProcess.kill();
+        }
+
+        await showToast({
+          style: Toast.Style.Failure,
+          title: "Error Stopping",
+          message: "Could not create stop signal",
+        });
+        return;
       }
 
       // Wait a bit for stop signal to be processed
@@ -357,8 +468,16 @@ export default function StartRecording() {
           title: "Stop Signal Sent",
           message: "Recording will finish shortly",
         });
-      }, 1000);
+      }, 500);
     } catch (error) {
+      console.error("[Record] Error stopping recording:", error);
+
+      // Fallback: kill process if signal fails
+      if (activeRecordingProcess && !activeRecordingProcess.killed) {
+        console.log("[Record] Fallback: Killing recording process");
+        activeRecordingProcess.kill();
+      }
+
       await showToast({
         style: Toast.Style.Failure,
         title: "Error Stopping",
@@ -367,7 +486,7 @@ export default function StartRecording() {
     }
   }
 
-  // Render recording status view
+  // Render recording status view (our own session)
   if (isRecording && recordingStatus) {
     const progress = recordingStatus.progress || 0;
     const elapsed = recordingStatus.elapsed || 0;
@@ -388,17 +507,14 @@ export default function StartRecording() {
 
 ${progressBar} ${!isManualMode ? `**${progress.toFixed(1)}%**` : ""}
 
-## Status
+## Recording Info
+- **Filename**: ${recordingStatus.filename}
 - **Time**: ${timeInfo}
 - **Quality**: ${recordingStatus.quality_info?.name || recordingStatus.quality}
 - **Device**: ${recordingStatus.device || "N/A"}
 - **Audio**: ${recordingStatus.sample_rate}Hz, ${recordingStatus.channels}ch
 - **Audio Detected**: ${recordingStatus.has_audio ? "✅ Yes" : "⏳ Waiting..."}
 - **Frames Captured**: ${recordingStatus.frames_captured || 0}
-
-## File Info
-- **Filename**: ${recordingStatus.filename}
-- **Expected Size**: ${recordingStatus.quality_info?.size_per_min || "N/A"}
 
 ${!recordingStatus.has_audio && elapsed > 3 ? "\n⚠️ **Warning**: No audio detected yet. Check if Teams is playing audio." : ""}
 
@@ -419,7 +535,15 @@ ${isManualMode ? "\n\n💡 **Tip**: Press **Stop Recording** button below when y
                 title="⏹️ Stop Recording"
                 icon={Icon.Stop}
                 style={Action.Style.Destructive}
-                onAction={stopManualRecording}
+                onAction={() => stopRecording()}
+              />
+            )}
+            {!isManualMode && (
+              <Action
+                title="⏹️ Stop Recording Early"
+                icon={Icon.Stop}
+                style={Action.Style.Destructive}
+                onAction={() => stopRecording()}
               />
             )}
             <Action
@@ -456,40 +580,92 @@ ${isManualMode ? "\n\n💡 **Tip**: Press **Stop Recording** button below when y
         </List.Dropdown>
       }
     >
-      <List.Section title="Recording Duration">
-        {DURATION_PRESETS.map((preset) => (
+      {existingRecording && (
+        <List.Section title="🔴 Active Recording in Progress">
           <List.Item
-            key={preset.value}
-            title={preset.label}
-            icon={preset.icon}
+            title={existingRecording.filename || "Recording"}
+            subtitle={`${existingRecording.elapsed || 0}s elapsed${(existingRecording.duration || 0) > 0 ? ` / ${existingRecording.duration}s` : " (no time limit)"}`}
+            icon="🔴"
             accessories={[
               {
-                text: RECORDING_QUALITIES.find((q) => q.id === selectedQuality)?.sizePerMin || "",
-                icon: Icon.HardDrive,
+                text: existingRecording.has_audio ? "✅ Audio" : "⏳ No audio",
               },
             ]}
             actions={
               <ActionPanel>
                 <Action
-                  title={`Start Recording (${preset.label})`}
-                  icon={Icon.Circle}
-                  onAction={() => startRecording(selectedQuality, preset.value)}
+                  title="⏹️ Stop This Recording"
+                  icon={Icon.Stop}
+                  style={Action.Style.Destructive}
+                  onAction={() => stopRecording(existingRecording.session_id)}
+                />
+                <Action
+                  title="View in Recording Status"
+                  icon={Icon.Eye}
+                  onAction={() => {
+                    showToast({
+                      style: Toast.Style.Success,
+                      title: "Tip",
+                      message: "Open 'Recording Status' command for more details",
+                    });
+                  }}
                 />
               </ActionPanel>
             }
           />
-        ))}
-      </List.Section>
+        </List.Section>
+      )}
+      <List.Section title="Recording Duration">
+        {DURATION_PRESETS.map((preset) => {
+          const selectedQualityObj = RECORDING_QUALITIES.find((q) => q.id === selectedQuality);
+          const sizePerMin = selectedQualityObj?.sizePerMin || "";
 
-      <List.Section title="Quality Info">
-        {RECORDING_QUALITIES.map((quality) => (
-          <List.Item
-            key={quality.id}
-            title={`${quality.icon} ${quality.name}`}
-            subtitle={quality.description}
-            accessories={[{ text: quality.sizePerMin }]}
-          />
-        ))}
+          // Calculate expected size for this duration, accounting for format compression
+          let expectedSize = sizePerMin;
+          if (sizePerMin) {
+            // Manual mode (value = -1) uses 1 minute as reference
+            const durationSeconds = preset.value === -1 ? 60 : preset.value;
+            if (durationSeconds > 0) {
+              const minutesDuration = Math.ceil(durationSeconds / 60);
+              const sizeMatch = sizePerMin.match(/(\d+\.?\d*)\s*MB/);
+              if (sizeMatch) {
+                let mbPerMin = parseFloat(sizeMatch[1]);
+
+                // Apply compression factor for M4A format
+                // M4A is typically 30-40% of WAV size (about 1/3)
+                if (prefs.audioFormat === "m4a") {
+                  mbPerMin = mbPerMin / 3;
+                }
+
+                const totalMb = Math.round(mbPerMin * minutesDuration);
+                expectedSize = `~${totalMb}MB`;
+              }
+            }
+          }
+
+          return (
+            <List.Item
+              key={preset.value}
+              title={preset.label}
+              icon={preset.icon}
+              accessories={[
+                {
+                  text: expectedSize,
+                  icon: Icon.HardDrive,
+                },
+              ]}
+              actions={
+                <ActionPanel>
+                  <Action
+                    title={`Start Recording (${preset.label})`}
+                    icon={Icon.Circle}
+                    onAction={() => startRecording(selectedQuality, preset.value)}
+                  />
+                </ActionPanel>
+              }
+            />
+          );
+        })}
       </List.Section>
     </List>
   );

@@ -3,7 +3,6 @@
     "allow": [
       "Bash(pip install:*)",
       "Bash(python:*)",
-      "Bash(git commit:*)",
       "Bash(git rm:*)",
       "WebFetch(domain:developers.raycast.com)",
       "Bash(node:*)",
@@ -52,7 +51,10 @@
       "Bash(done)",
       "Bash(.venvScriptspython.exe -m cli record 10)",
       "Bash(git checkout:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(python3:*)",
+      "Bash(tree:*)",
+      "Bash(nul)"
     ],
     "deny": []
   }
