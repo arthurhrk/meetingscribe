@@ -35,6 +35,10 @@ interface RecordingStatus {
   has_audio?: boolean;
   frames_captured?: number;
   device?: string;
+  speaker_device?: string;
+  microphone_device?: string;
+  dual_recording?: boolean;
+  mic_warning?: string;
   sample_rate?: number;
   channels?: number;
   message?: string;
@@ -236,13 +240,26 @@ No recordings in progress right now.
           ? "❌"
           : "⏳";
 
-      const warningMessage =
-        !recording.has_audio && elapsed > 3
-          ? "\n\n⚠️ **Warning**: No audio detected yet. Check if audio is playing.\n"
-          : "";
+      // Build warning messages
+      let warningMessage = "";
+      if (recording.mic_warning) {
+        warningMessage += `\n\n⚠️ **Warning**: ${recording.mic_warning}\n`;
+      }
+      if (!recording.has_audio && elapsed > 3) {
+        warningMessage += "\n\n⚠️ **Warning**: No audio detected yet. Check if audio is playing.\n";
+      }
+
+      // Format device info - show dual recording status
+      const deviceInfo = recording.dual_recording
+        ? `Speaker: ${recording.speaker_device || "N/A"}\n- **Microphone**: ${recording.microphone_device || "N/A"}`
+        : recording.device || "N/A";
+
+      const recordingModeLabel = recording.dual_recording
+        ? "Recording in Progress (Speaker + Mic)"
+        : "Recording in Progress";
 
       return `
-# ${statusIcon} ${recording.status === "recording" ? "Recording in Progress" : recording.status}
+# ${statusIcon} ${recording.status === "recording" ? recordingModeLabel : recording.status}
 
 ${progressBar} ${duration > 0 ? `**${progress.toFixed(1)}%**` : ""}
 
@@ -250,9 +267,9 @@ ${progressBar} ${duration > 0 ? `**${progress.toFixed(1)}%**` : ""}
 - **Session**: ${recording.session_id}
 - **Time**: ${elapsed}s ${isManual ? "(Manual - no limit)" : `/ ${duration}s (${remaining}s remaining)`}
 - **Quality**: ${recording.quality_info?.name || recording.quality || "N/A"}
-- **Device**: ${recording.device || "N/A"}
+- **${recording.dual_recording ? "Devices" : "Device"}**: ${deviceInfo}
 - **Audio**: ${recording.sample_rate || 0}Hz, ${recording.channels || 0}ch
-- **Audio Detected**: ${recording.has_audio ? "✅ Yes" : "⏳ Waiting..."}
+- **Audio Detected**: ${recording.has_audio ? "Yes" : "Waiting..."}
 - **Frames Captured**: ${recording.frames_captured || 0}
 
 ## File Info
