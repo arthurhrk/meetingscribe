@@ -13,6 +13,7 @@ import wave
 import threading
 import time
 import struct
+import queue
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Callable, Dict, Any, List, Tuple
@@ -136,6 +137,10 @@ class DualStreamRecorder:
         self._mic_stream = None
         self._recording = False
         self._recording_thread = None
+        self._speaker_reader_thread = None
+        self._mic_reader_thread = None
+        self._speaker_queue: queue.Queue = queue.Queue(maxsize=100)
+        self._mic_queue: queue.Queue = queue.Queue(maxsize=100)
         self._frames: List[bytes] = []  # Mixed audio frames
         self._stats = None
         self._progress_callback = None
@@ -143,6 +148,7 @@ class DualStreamRecorder:
         self._has_audio_detected = False
         self._audio_threshold = 100
         self._lock = threading.Lock()
+        self._mic_opened_successfully = False  # Track if mic was opened
 
         if not NUMPY_AVAILABLE:
             logger.warning("NumPy not available - audio mixing will be limited (speaker-only fallback)")
@@ -423,12 +429,54 @@ class DualStreamRecorder:
                     'input_device_index': self._config.microphone_device.index,
                     'frames_per_buffer': self._config.chunk_size
                 }
-                logger.debug(f"Microphone stream config: {mic_config}")
-                self._mic_stream = self._audio.open(**mic_config)
-                logger.info(f"Microphone stream opened: {self._config.microphone_device.name}")
+                try:
+                    logger.debug(f"Microphone stream config: {mic_config}")
+                    self._mic_stream = self._audio.open(**mic_config)
+                    self._mic_opened_successfully = True
+                    logger.info(f"Microphone stream opened: {self._config.microphone_device.name}")
+                except Exception as e:
+                    logger.warning(f"Failed to open microphone stream: {e}")
+                    logger.warning("Recording will continue with speaker audio only")
+                    self._mic_stream = None
+                    self._mic_opened_successfully = False
 
-            # Start recording thread
+            # Get format parameters for reader threads
+            speaker_rate = int(self._config.speaker_device.default_sample_rate) if self._config.speaker_device else self._config.sample_rate
+            speaker_channels = min(self._config.speaker_device.max_input_channels, 2) if self._config.speaker_device else 2
+            if speaker_channels == 0:
+                speaker_channels = 2
+
+            mic_rate = int(self._config.microphone_device.default_sample_rate) if self._config.microphone_device else self._config.sample_rate
+            mic_channels_actual = min(self._config.microphone_device.max_input_channels, 2) if self._config.microphone_device else 1
+            if mic_channels_actual == 0:
+                mic_channels_actual = 1
+
+            target_rate = self._config.sample_rate
+            target_channels = self._config.channels
+
+            # Start recording
             self._recording = True
+
+            # Start reader threads for each stream (parallel reading)
+            if self._speaker_stream:
+                self._speaker_reader_thread = threading.Thread(
+                    target=self._stream_reader,
+                    args=(self._speaker_stream, self._speaker_queue, "Speaker",
+                          speaker_rate, speaker_channels, target_rate, target_channels)
+                )
+                self._speaker_reader_thread.daemon = True
+                self._speaker_reader_thread.start()
+
+            if self._mic_stream:
+                self._mic_reader_thread = threading.Thread(
+                    target=self._stream_reader,
+                    args=(self._mic_stream, self._mic_queue, "Microphone",
+                          mic_rate, mic_channels_actual, target_rate, target_channels)
+                )
+                self._mic_reader_thread.daemon = True
+                self._mic_reader_thread.start()
+
+            # Start mixing thread
             self._recording_thread = threading.Thread(target=self._recording_worker)
             self._recording_thread.daemon = True
             self._recording_thread.start()
@@ -454,23 +502,49 @@ class DualStreamRecorder:
         except Exception:
             return 0.0
 
+    def _stream_reader(self, stream, output_queue: queue.Queue,
+                       stream_name: str, src_rate: int, src_channels: int,
+                       target_rate: int, target_channels: int) -> None:
+        """
+        Reader thread for a single audio stream.
+        Reads data and pushes to queue for mixing.
+        """
+        logger.debug(f"{stream_name} reader thread started")
+
+        while self._recording:
+            try:
+                if stream and not stream.is_stopped():
+                    data = stream.read(self._config.chunk_size, exception_on_overflow=False)
+
+                    # Convert format if needed
+                    if NUMPY_AVAILABLE and data and (src_rate != target_rate or src_channels != target_channels):
+                        data = self._convert_audio_format(data, src_rate, target_rate, src_channels, target_channels)
+
+                    # Non-blocking put with timeout
+                    try:
+                        output_queue.put(data, block=False)
+                    except queue.Full:
+                        # Drop oldest frame to make room (avoid blocking)
+                        try:
+                            output_queue.get_nowait()
+                            output_queue.put(data, block=False)
+                        except queue.Empty:
+                            pass
+                else:
+                    time.sleep(0.01)
+
+            except Exception as e:
+                if "invalid" in str(e).lower() or "closed" in str(e).lower():
+                    logger.warning(f"{stream_name} stream closed, stopping reader")
+                    break
+                logger.warning(f"Error reading {stream_name} stream: {e}")
+                time.sleep(0.01)
+
+        logger.debug(f"{stream_name} reader thread finished")
+
     def _recording_worker(self) -> None:
-        """Worker thread that performs dual-stream recording."""
-        logger.debug("Dual-stream recording thread started")
-
-        # Get device parameters for format conversion
-        speaker_rate = int(self._config.speaker_device.default_sample_rate) if self._config.speaker_device else self._config.sample_rate
-        speaker_channels = min(self._config.speaker_device.max_input_channels, 2) if self._config.speaker_device else 2
-        if speaker_channels == 0:
-            speaker_channels = 2
-
-        mic_rate = int(self._config.microphone_device.default_sample_rate) if self._config.microphone_device else self._config.sample_rate
-        mic_channels = min(self._config.microphone_device.max_input_channels, 2) if self._config.microphone_device else 1
-        if mic_channels == 0:
-            mic_channels = 1
-
-        target_rate = self._config.sample_rate
-        target_channels = self._config.channels
+        """Worker thread that mixes audio from reader threads."""
+        logger.debug("Dual-stream mixing thread started")
 
         try:
             start_time = time.time()
@@ -489,37 +563,16 @@ class DualStreamRecorder:
                     speaker_data = None
                     mic_data = None
 
-                    # Read from speaker stream
-                    if self._speaker_stream and not self._speaker_stream.is_stopped():
-                        try:
-                            speaker_data = self._speaker_stream.read(
-                                self._config.chunk_size,
-                                exception_on_overflow=False
-                            )
-                            # Convert to target format if needed
-                            if NUMPY_AVAILABLE and speaker_data:
-                                speaker_data = self._convert_audio_format(
-                                    speaker_data, speaker_rate, target_rate,
-                                    speaker_channels, target_channels
-                                )
-                        except Exception as e:
-                            logger.warning(f"Error reading speaker stream: {e}")
+                    # Get data from queues (non-blocking)
+                    try:
+                        speaker_data = self._speaker_queue.get_nowait()
+                    except queue.Empty:
+                        pass
 
-                    # Read from microphone stream
-                    if self._mic_stream and not self._mic_stream.is_stopped():
-                        try:
-                            mic_data = self._mic_stream.read(
-                                self._config.chunk_size,
-                                exception_on_overflow=False
-                            )
-                            # Convert to target format if needed
-                            if NUMPY_AVAILABLE and mic_data:
-                                mic_data = self._convert_audio_format(
-                                    mic_data, mic_rate, target_rate,
-                                    mic_channels, target_channels
-                                )
-                        except Exception as e:
-                            logger.warning(f"Error reading microphone stream: {e}")
+                    try:
+                        mic_data = self._mic_queue.get_nowait()
+                    except queue.Empty:
+                        pass
 
                     # Mix and store the audio
                     if speaker_data or mic_data:
@@ -552,19 +605,22 @@ class DualStreamRecorder:
                         except Exception as e:
                             logger.warning(f"Error in progress callback: {e}")
 
-                    # Small pause to avoid 100% CPU usage
-                    time.sleep(0.01)
+                    # Small pause - reader threads handle the actual stream timing
+                    time.sleep(0.005)
 
                 except Exception as e:
-                    logger.warning(f"Error in recording loop: {e}")
-                    if "invalid" in str(e).lower() or "closed" in str(e).lower():
-                        logger.error("Stream invalid, stopping recording")
-                        break
+                    logger.warning(f"Error in mixing loop: {e}")
 
         except Exception as e:
-            logger.error(f"Critical error in recording thread: {e}")
+            logger.error(f"Critical error in mixing thread: {e}")
 
         finally:
+            # Wait for reader threads to finish
+            if self._speaker_reader_thread and self._speaker_reader_thread.is_alive():
+                self._speaker_reader_thread.join(timeout=2.0)
+            if self._mic_reader_thread and self._mic_reader_thread.is_alive():
+                self._mic_reader_thread.join(timeout=2.0)
+
             # Close streams
             for stream, name in [(self._speaker_stream, "speaker"), (self._mic_stream, "microphone")]:
                 if stream and not stream.is_stopped():
@@ -575,7 +631,7 @@ class DualStreamRecorder:
                     except Exception as e:
                         logger.warning(f"Error closing {name} stream: {e}")
 
-            logger.debug("Dual-stream recording thread finished")
+            logger.debug("Dual-stream mixing thread finished")
 
     def stop_recording(self) -> DualRecordingStats:
         """
@@ -692,8 +748,16 @@ class DualStreamRecorder:
     def get_device_names(self) -> Tuple[Optional[str], Optional[str]]:
         """Get the names of both devices being used."""
         speaker = self._config.speaker_device.name if self._config.speaker_device else None
-        mic = self._config.microphone_device.name if self._config.microphone_device else None
+        # Only report mic if it was actually opened successfully
+        if self._mic_opened_successfully and self._config.microphone_device:
+            mic = self._config.microphone_device.name
+        else:
+            mic = None
         return (speaker, mic)
+
+    def is_mic_active(self) -> bool:
+        """Check if microphone is actively recording."""
+        return self._mic_opened_successfully and self._mic_stream is not None
 
     def get_sample_rate(self) -> int:
         """Get the sample rate."""
@@ -726,6 +790,12 @@ class DualStreamRecorder:
         """Clean up recording resources in case of error."""
         self._recording = False
 
+        # Wait for reader threads to finish
+        if self._speaker_reader_thread and self._speaker_reader_thread.is_alive():
+            self._speaker_reader_thread.join(timeout=1.0)
+        if self._mic_reader_thread and self._mic_reader_thread.is_alive():
+            self._mic_reader_thread.join(timeout=1.0)
+
         for stream in [self._speaker_stream, self._mic_stream]:
             if stream:
                 try:
@@ -736,8 +806,23 @@ class DualStreamRecorder:
 
         self._speaker_stream = None
         self._mic_stream = None
+        self._speaker_reader_thread = None
+        self._mic_reader_thread = None
         self._frames = []
         self._stats = None
+        self._mic_opened_successfully = False
+
+        # Clear queues
+        while not self._speaker_queue.empty():
+            try:
+                self._speaker_queue.get_nowait()
+            except queue.Empty:
+                break
+        while not self._mic_queue.empty():
+            try:
+                self._mic_queue.get_nowait()
+            except queue.Empty:
+                break
 
     def close(self) -> None:
         """Finalize the recorder and release resources."""

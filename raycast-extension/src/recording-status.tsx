@@ -38,6 +38,7 @@ interface RecordingStatus {
   speaker_device?: string;
   microphone_device?: string;
   dual_recording?: boolean;
+  mic_warning?: string;
   sample_rate?: number;
   channels?: number;
   message?: string;
@@ -239,10 +240,14 @@ No recordings in progress right now.
           ? "❌"
           : "⏳";
 
-      const warningMessage =
-        !recording.has_audio && elapsed > 3
-          ? "\n\n⚠️ **Warning**: No audio detected yet. Check if audio is playing.\n"
-          : "";
+      // Build warning messages
+      let warningMessage = "";
+      if (recording.mic_warning) {
+        warningMessage += `\n\n⚠️ **Warning**: ${recording.mic_warning}\n`;
+      }
+      if (!recording.has_audio && elapsed > 3) {
+        warningMessage += "\n\n⚠️ **Warning**: No audio detected yet. Check if audio is playing.\n";
+      }
 
       // Format device info - show dual recording status
       const deviceInfo = recording.dual_recording

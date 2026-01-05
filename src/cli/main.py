@@ -116,6 +116,13 @@ def quick_record(duration: int = 30, filename: Optional[str] = None, audio_forma
             quality_preset = RecordingQuality.get('professional')
             initial_display_duration = 0 if is_manual_mode else duration
             speaker_device, mic_device = recorder.get_device_names()
+
+            # Check if mic was expected but failed to open
+            mic_warning = None
+            if recorder._config.microphone_device and not recorder.is_mic_active():
+                mic_warning = "Microphone failed to open - recording speaker only"
+                logger.warning(mic_warning)
+
             status_file.write_text(json.dumps({
                 "status": "recording",
                 "session_id": session_id,
@@ -133,6 +140,7 @@ def quick_record(duration: int = 30, filename: Optional[str] = None, audio_forma
                 "speaker_device": speaker_device,
                 "microphone_device": mic_device,
                 "dual_recording": mic_device is not None,
+                "mic_warning": mic_warning,
                 "sample_rate": recorder.get_sample_rate(),
                 "channels": recorder.get_channels(),
                 "frames_captured": 0,
@@ -181,6 +189,7 @@ def quick_record(duration: int = 30, filename: Optional[str] = None, audio_forma
                     "speaker_device": speaker_device,
                     "microphone_device": mic_device,
                     "dual_recording": mic_device is not None,
+                    "mic_warning": mic_warning,
                     "sample_rate": recorder.get_sample_rate(),
                     "channels": recorder.get_channels(),
                     "frames_captured": recorder.get_frames_captured(),
