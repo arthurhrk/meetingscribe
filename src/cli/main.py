@@ -17,6 +17,7 @@ def quick_record(duration: int = 30, filename: Optional[str] = None, audio_forma
     """
     Quick recording function for Raycast integration.
     Returns JSON immediately, continues recording in background.
+    Records both system audio (speaker) and microphone simultaneously.
 
     Args:
         duration: Recording duration in seconds
@@ -29,7 +30,7 @@ def quick_record(duration: int = 30, filename: Optional[str] = None, audio_forma
     # Lazy import - only load when actually recording
     from loguru import logger
     from config import settings
-    from audio import AudioRecorder, AudioRecorderError, RecordingQuality
+    from audio import DualStreamRecorder, DualStreamRecorderError, RecordingQuality
 
     logger.debug(f"========================================")
     logger.debug(f"quick_record() called with:")
@@ -67,20 +68,20 @@ def quick_record(duration: int = 30, filename: Optional[str] = None, audio_forma
 
     # Start recording in background thread
     def record_worker():
-        """Background worker for recording with status updates"""
+        """Background worker for dual-stream recording with status updates"""
         start_time = time.time()
 
         try:
-            recorder = AudioRecorder()
+            recorder = DualStreamRecorder()
 
-            # Auto-select best device (WASAPI loopback preferred)
-            if not recorder.set_device_auto():
-                logger.error("Failed to select audio device")
+            # Auto-select both speaker (loopback) and microphone devices
+            if not recorder.set_devices_auto():
+                logger.error("Failed to select audio devices")
                 # Write error status
                 status_file.write_text(json.dumps({
                     "status": "error",
                     "session_id": session_id,
-                    "error": "Failed to select audio device"
+                    "error": "Failed to select audio devices"
                 }))
                 return
 
@@ -94,22 +95,27 @@ def quick_record(duration: int = 30, filename: Optional[str] = None, audio_forma
             recorder._config.max_duration = max_duration
             recorder._config.audio_format = audio_format.lower()
 
+            # Get device names for logging
+            speaker_name, mic_name = recorder.get_device_names()
+
             logger.debug(f"========================================")
-            logger.debug(f"Recorder configuration:")
+            logger.debug(f"Dual-stream recorder configuration:")
             logger.debug(f"  max_duration: {recorder._config.max_duration}")
             logger.debug(f"  audio_format: {recorder._config.audio_format}")
-            logger.debug(f"  device: {recorder._config.device.name if recorder._config.device else 'None'}")
+            logger.debug(f"  speaker_device: {speaker_name}")
+            logger.debug(f"  microphone_device: {mic_name}")
             logger.debug(f"  sample_rate: {recorder._config.sample_rate}")
             logger.debug(f"  channels: {recorder._config.channels}")
             logger.debug(f"========================================")
 
             # Start recording
             recorder.start_recording(filename=filename)
-            logger.info(f"Recording started: {filename} ({duration}s, format: {audio_format})")
+            logger.info(f"Dual-stream recording started: {filename} ({duration}s, format: {audio_format})")
 
-            # Write initial status with metadata
+            # Write initial status with metadata (now includes both devices)
             quality_preset = RecordingQuality.get('professional')
             initial_display_duration = 0 if is_manual_mode else duration
+            speaker_device, mic_device = recorder.get_device_names()
             status_file.write_text(json.dumps({
                 "status": "recording",
                 "session_id": session_id,
@@ -123,7 +129,10 @@ def quick_record(duration: int = 30, filename: Optional[str] = None, audio_forma
                     "description": quality_preset['description'],
                     "size_per_min": quality_preset['size_per_min']
                 },
-                "device": recorder.get_device_name(),
+                "device": speaker_device,
+                "speaker_device": speaker_device,
+                "microphone_device": mic_device,
+                "dual_recording": mic_device is not None,
                 "sample_rate": recorder.get_sample_rate(),
                 "channels": recorder.get_channels(),
                 "frames_captured": 0,
@@ -168,7 +177,10 @@ def quick_record(duration: int = 30, filename: Optional[str] = None, audio_forma
                         "description": quality_preset['description'],
                         "size_per_min": quality_preset['size_per_min']
                     },
-                    "device": recorder.get_device_name(),
+                    "device": speaker_device,
+                    "speaker_device": speaker_device,
+                    "microphone_device": mic_device,
+                    "dual_recording": mic_device is not None,
                     "sample_rate": recorder.get_sample_rate(),
                     "channels": recorder.get_channels(),
                     "frames_captured": recorder.get_frames_captured(),
@@ -200,7 +212,10 @@ def quick_record(duration: int = 30, filename: Optional[str] = None, audio_forma
                     "description": quality_preset['description'],
                     "size_per_min": quality_preset['size_per_min']
                 },
-                "device": recorder.get_device_name(),
+                "device": speaker_device,
+                "speaker_device": speaker_device,
+                "microphone_device": mic_device,
+                "dual_recording": mic_device is not None,
                 "sample_rate": recorder.get_sample_rate(),
                 "channels": recorder.get_channels(),
                 "frames_captured": recorder.get_frames_captured(),
@@ -209,7 +224,7 @@ def quick_record(duration: int = 30, filename: Optional[str] = None, audio_forma
 
             logger.info(f"Status updated to completed: {file_size_mb}MB")
 
-        except AudioRecorderError as e:
+        except DualStreamRecorderError as e:
             logger.error(f"Recording error: {e}")
             status_file.write_text(json.dumps({
                 "status": "error",
